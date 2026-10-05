@@ -1,0 +1,86 @@
+.loginContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background-color: var(--bg);
+  width: 100vw;
+}
+
+.loginBox {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--spacing-2xl);
+}
+
+.logoMark {
+  width: 48px;
+  height: 48px;
+  background-color: var(--accent);
+  color: var(--n-900);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: var(--font-2xl);
+  margin-bottom: var(--spacing-md);
+}
+
+.title {
+  margin-bottom: var(--spacing-xl);
+  color: var(--text-primary);
+}
+
+.form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.inputGroup label {
+  font-family: var(--font-heading);
+  font-size: var(--font-sm);
+  color: var(--text-secondary);
+}
+
+.inputGroup input {
+  background-color: var(--bg);
+  border: var(--border-width) solid var(--border);
+  color: var(--text-primary);
+  padding: var(--spacing-sm);
+  border-radius: 4px;
+  font-family: var(--font-body);
+  font-size: var(--font-base);
+}
+
+.inputGroup input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.errorBanner {
+  background-color: rgba(255, 77, 77, 0.1);
+  color: var(--fail);
+  padding: var(--spacing-sm);
+  border-radius: 4px;
+  font-size: var(--font-sm);
+  text-align: center;
+  border: var(--border-width) solid var(--fail);
+}
+
+.submitBtn {
+  margin-top: var(--spacing-sm);
+  width: 100%;
+}

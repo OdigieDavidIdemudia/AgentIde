@@ -1,0 +1,140 @@
+{
+  "meta": {
+    "name": "Personal Marketing Site Standard",
+    "version": "1.1",
+    "purpose": "A reusable standard for the public marketing/landing site that sits in front of any app. Governs page structure and the pathway that gets a visitor from 'never heard of this' into the actual product. Visual language (typography, color derivation, signature element, anti-patterns) is inherited directly from personal-design-standard.json — this file does not redefine those, it adds marketing-specific structure and its own additional anti-patterns.",
+    "relationship_to_other_standards": "personal-design-standard.json = visual language for everything, including this site. personal-admin-standard.json = the app's own admin/management side, not relevant to the public marketing site. This file = what a marketing site must contain, in what order, and how it hands the visitor off to the real product."
+  },
+  "core_principle": {
+    "statement": "The marketing site's only job is to get the right person to understand what the product does and move them into the product. Every section should either build understanding or move the visitor toward that handoff — nothing exists purely for decoration.",
+    "consequence": "If a section doesn't build understanding of the specific product or advance the visitor toward signing up, cut it. This rules out generic filler sections added because 'marketing sites usually have this.'"
+  },
+  "user_pathway_to_app": {
+    "flow": "Marketing site (public, unauthenticated) → Sign up or Login (auth boundary) → App (the actual product, e.g. a separate authenticated area or subdomain).",
+    "cta_rules": {
+      "specificity": "Primary CTA text names the actual action in this product's terms, not generic filler. 'Start certifying your team' beats 'Get Started'. 'Get Started' is allowed only if nothing more specific fits the product.",
+      "placement": "Primary CTA appears at minimum in: the nav bar, the hero section, and the final section before the footer. A visitor should never have to scroll back up to find it.",
+      "secondary_cta": "A 'Login' link/button is always present in the nav, distinct from the primary sign-up CTA, so returning users aren't funneled through marketing copy again.",
+      "no_dead_ends": "Every major section (features, how-it-works, pricing if present) should be within easy reach of a CTA — either its own or the nearest one — rather than making the visitor hunt."
+    },
+    "post_signup_redirect": "Signing up leads directly into the app's own onboarding/first-run experience, not a marketing 'Thank you, check your email' dead-end page unless email verification is a genuine functional requirement. If verification is required, that interstitial page still names the next concrete step."
+  },
+  "site_structure": {
+    "required_order": [
+      "nav_bar",
+      "hero_section",
+      "problem_and_value_section",
+      "how_it_works_section",
+      "feature_highlights_section",
+      "stats_section (optional)",
+      "pricing_section (optional)",
+      "social_proof_section (optional — see rules)",
+      "about_section (optional)",
+      "faq_section (optional)",
+      "final_cta_section (or interactive demo contact)",
+      "footer",
+      "compliance_banner"
+    ],
+    "nav_bar": {
+      "required_elements": [
+        "Logo (links to homepage)",
+        "A small number of nav links to on-page sections or key subpages (not more than 5–6)",
+        "Login link",
+        "Primary sign-up CTA button, visually distinct from nav links per personal-design-standard.json's accent-color rules",
+        "Theme toggle (Light/Dark mode) if supported by the overarching design system"
+      ],
+      "behavior": "Sticky/persistent on scroll, so the CTA is always reachable."
+    },
+    "hero_section": {
+      "headline": "States what the product actually does for the actual visitor, grounded in the real value proposition — not a superlative ('The future of X', 'Revolutionizing X'). This is one of the few places the display serif face (personal-design-standard.json) is used at large size, since it's the single most important headline on the page.",
+      "subheadline": "One or two sentences of concrete elaboration — who it's for and what changes for them, not restating the headline in different words.",
+      "primary_cta": "The sign-up CTA, prominent.",
+      "secondary_cta": "Optional, lower-emphasis: 'See how it works' (anchors to how_it_works_section) or a demo link — never a second competing sign-up button."
+    },
+    "problem_and_value_section": {
+      "purpose": "Names the specific problem this product solves and why it matters, before listing features. Skip generic problem statements that could apply to any product in the category."
+    },
+    "how_it_works_section": {
+      "purpose": "This is the one place numbered steps (1/2/3) are explicitly sanctioned — unlike personal-design-standard.json's general ban on decorative numbering, this content is a genuine sequence: how a visitor goes from landing here to using the product.",
+      "guidance": "3–5 steps max, each naming a concrete action, ending at 'you're in the app' — this section is the visual representation of user_pathway_to_app."
+    },
+    "feature_highlights_section": {
+      "purpose": "Specific capabilities, described in terms of what the user can now do, not abstract adjectives ('powerful', 'seamless', 'intuitive' are banned as feature descriptors — describe the actual capability instead).",
+      "signature_element_note": "This section is a reasonable place to reuse the app's own signature_element (from personal-design-standard.json) if it translates visually to a marketing context — reinforces that the marketing site and the product are the same thing, not a disconnected brand wrapper."
+    },
+    "stats_section": {
+      "purpose": "Provides rapid, scannable proof of scale, reliability, or speed (e.g., Uptime, Core Modules, Onboarding Time).",
+      "rule": "Metrics must be real and verifiable. Visual treatment should be stark and typography-led, avoiding unnecessary icons or charts if the number speaks for itself."
+    },
+    "pricing_section": {
+      "purpose": "Clear, transparent breakdown of what the product costs. Must lead directly into the sign-up flow.",
+      "guidance": "Use clean tiered cards. If applicable, include a simple toggle for billing periods (Monthly/Annually). Explicitly state limits (e.g., 'Up to 30 users'). Include a CTA per tier.",
+      "rule": "Never use deceptive patterns. A 'Most Popular' badge is banned unless supported by genuine analytical data proving it is the default choice."
+    },
+    "social_proof_section": {
+      "rule": "Only include if genuinely real — real customer logos with permission, real testimonials, real usage numbers. If none exist yet (e.g. pre-launch or internal tool), omit this section entirely rather than fabricating placeholder content. A missing section is honest; a fake one is a credibility risk and is explicitly disallowed by this standard."
+    },
+    "about_section": {
+      "purpose": "Grounds the product in its origin story, core philosophy, or specific target demographic (e.g., 'Built by Africans, for African enterprises'). Connects the 'why' with the target audience."
+    },
+    "faq_section": {
+      "purpose": "Addresses actual common friction points, objections, or practical questions (Security, On-premise deployment, Support SLAs).",
+      "guidance": "Use native details/summary accordions to keep the page clean and allow scanning."
+    },
+    "final_cta_section": {
+      "purpose": "A clean, low-noise final push. Can be a standard restatement of value + primary CTA, or an interactive element (e.g., a conversational 'Request a Demo' form) to reduce friction.",
+      "guidance": "Not a wall of new information this late in the page."
+    },
+    "footer": {
+      "required_elements": [
+        "Logo/name",
+        "A few grouped link columns as relevant (Product, Company, Legal/Contact) — omit any column with fewer than 2 real links rather than padding it out",
+        "Copyright line"
+      ]
+    },
+    "compliance_banner": {
+      "purpose": "A non-intrusive cookie/privacy consent banner required if using analytics.",
+      "guidance": "Must allow explicit accept/decline actions and link to the relevant policy. Should follow the site's dark/light theme seamlessly without taking over the screen."
+    },
+    "legal_pages": {
+      "purpose": "Hosts Terms of Service, Privacy Policy, and Cookie Policy.",
+      "guidance": "Must inherit the exact same navigation, footer, typography, and theme toggle (Light/Dark) as the main marketing site. Do not use generic, unstyled markdown dumps."
+    }
+  },
+  "visual_language": {
+    "inherits": "personal-design-standard.json in full — typography, color derivation methodology, signature element, layout/spacing, components, motion, voice_and_copy, and the anti_patterns list all apply here without modification.",
+    "marketing_specific_note": "Run color_methodology's step 1 (ground it in the subject) against the marketing site the same way as the app — the marketing site and the app should derive from the same subject grounding and end up with the same palette. This is one product, not two.",
+    "motion_and_interaction": "Navigation links jumping to in-page anchors must always use smooth scrolling (`scroll-behavior: smooth` in CSS) for a polished, seamless feel."
+  },
+  "marketing_specific_anti_patterns": {
+    "status": "ADDITIONAL to personal-design-standard.json's anti_patterns list — both apply.",
+    "banned_defaults": [
+      "Stock photography of generic diverse people smiling at laptops or pointing at screens.",
+      "A 'Trusted by' logo strip using placeholder, generic, or unauthorized company logos.",
+      "Gradient mesh / blob background art behind the hero section.",
+      "Glassmorphism pricing or feature cards.",
+      "Floating abstract 3D shapes with no connection to the product.",
+      "Animated gradient text on the headline.",
+      "Vague, unverifiable social proof claims ('Join thousands of users') without real backing numbers.",
+      "Testimonial carousels populated with stock avatar photos instead of real people.",
+      "Exit-intent popups or aggressive scroll-triggered modals.",
+      "A pricing table with a suspiciously highlighted 'Most Popular' middle tier as a default pattern, used without an actual reason that tier is the intended default choice.",
+      "Feature sections that only use abstract adjectives (powerful, seamless, intuitive, next-generation) instead of naming the actual capability.",
+      "Missing .html extensions on local footer links that break local file viewing."
+    ]
+  },
+  "process_checklist": {
+    "instructions": "Run through when building a marketing site for any project.",
+    "steps": [
+      "1. Confirm the visual language by pulling personal-design-standard.json's derived palette/typography for this specific product — don't re-derive separately from the app.",
+      "2. Write the hero headline/subheadline first, stating the real value in concrete terms — if it could be pasted onto a competitor's site unchanged, it's too generic.",
+      "3. Build site_structure in the required order; cut any section that doesn't build understanding or move the visitor toward sign-up.",
+      "4. Map how_it_works_section directly onto user_pathway_to_app — the steps a visitor reads should match the steps they'll actually take.",
+      "5. Decide social_proof_section honestly: real content or omit, never fabricated.",
+      "6. Check every CTA against cta_rules.specificity — replace generic CTA copy with product-specific action language.",
+      "7. Ensure specialized sections (Pricing, FAQ, About, Stats) adhere to minimalism and transparency rules.",
+      "8. Check the full page against both anti_patterns lists (design standard + marketing_specific_anti_patterns here) before shipping.",
+      "9. Verify interactive visual elements (e.g. 3D models/Three.js) load correctly and check the console for syntax errors breaking the render loop."
+    ]
+  }
+}

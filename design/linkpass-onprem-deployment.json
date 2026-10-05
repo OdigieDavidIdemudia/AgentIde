@@ -1,0 +1,174 @@
+{
+  "$schema": "onprem-deployment-standard-v1",
+  "meta": {
+    "name": "LinkPass Enterprise On-Premises Deployment Specification",
+    "version": "1.0.0",
+    "target_architecture": "Enterprise Air-Gapped & Private VPC Infrastructure",
+    "last_updated": "2026-08-09",
+    "author": "SyncGlide Enterprise",
+    "description": "Standard architectural requirements, packaging bundles, security constraints, and operational workflows for deploying LinkPass in isolated on-premises enterprise environments."
+  },
+
+  "core_principles": [
+    "Zero-Knowledge First: server never handles unencrypted client secrets or private key material",
+    "Zero Source Code Shipped: only compiled binaries, container images, or minified static assets are distributed — no raw source",
+    "Air-Gapped Autonomy: zero required internet dependencies; licensing verified offline via asymmetric RS256 RSA keys",
+    "Deployment Flexibility: supports both Docker Compose containerized and host-native Linux deployments",
+    "Auditability: security-relevant actions are logged with an immutable 90-day retention period"
+  ],
+
+  "deployment_strategy": {
+    "chosen_method": "both",
+    "rationale": "Docker Compose provides an isolated, single-command deployment path across Ubuntu and RHEL without dependency conflicts, while host-native systemd support fits strict corporate environments where Docker is restricted."
+  },
+
+  "packaging_strategy": {
+    "bundles": [
+      {
+        "bundle_id": "LinkPass-Linux-Server.zip",
+        "target": "Enterprise On-Premises Server",
+        "contents": [
+          "server/ (FastAPI application engine, router modules, middleware)",
+          "server/Dockerfile (Python 3.11 container environment manifest)",
+          "server/license_pub.pem (Production RSA Public Key for offline RS256 JWT validation)",
+          "server/certs/ (SSL/TLS certificate store for HTTPS execution)",
+          "docker-compose.yml (Container orchestration manifest with SQLite and PostgreSQL HA options)",
+          "docs/linux_deployment_guide.md (Complete step-by-step Linux setup guide)"
+        ],
+        "installation_method": "unzip LinkPass-Linux-Server.zip -d LinkPass && cd LinkPass && cp /path/to/license.jwt server/ && sudo docker compose up --build -d"
+      },
+      {
+        "bundle_id": "LinkPass-Client.zip",
+        "target": "End-user workstations (Windows Desktop)",
+        "contents": [
+          "LinkPass.exe (Standalone compiled PyInstaller GUI application)",
+          "config.json (Server endpoint pointer: {\"server_url\": \"https://<SERVER_IP>:443\"})",
+          "cacert.pem (Custom corporate SSL/TLS root certificate trust bundle)"
+        ],
+        "installation_method": "uncompress LinkPass-Client.zip -> update config.json with Linux server IP -> launch LinkPass.exe"
+      },
+      {
+        "bundle_id": "KeyGen.zip",
+        "target": "Security Operations / Admin Workstation (Air-Gapped)",
+        "contents": [
+          "KeyGen/main.py (Tkinter licensing GUI application)",
+          "KeyGen/linkpass_private_key.pem (RSA 2048-bit Private Signing Key — KEEP STRICTLY CONFIDENTIAL)",
+          "KeyGen/Linkpass/generate_linkpass_license.py (CLI license generation engine)",
+          "KeyGen/Linkpass/req.txt (License criteria and payload guidelines)"
+        ],
+        "installation_method": "Run python main.py on secure air-gapped machine to generate client `.lic` files"
+      }
+    ]
+  },
+
+  "build_pipeline": {
+    "build_environment": "Windows / Linux build runner with PyInstaller & Docker Engine 24+",
+    "steps": {
+      "frontend": ["cd client_web", "npx vite build --outDir dist"],
+      "backend": ["pip install -r server/requirements.txt", "docker build -t linkpass-server:latest -f server/Dockerfile ."],
+      "packaging": ["powershell -ExecutionPolicy Bypass -File build_client.ps1", "zip -r LinkPass-Linux-Server.zip server/ docker-compose.yml docs/ README.md"]
+    }
+  },
+
+  "infrastructure_spec": {
+    "supported_operating_systems": [
+      "Ubuntu Server 20.04 LTS",
+      "Ubuntu Server 22.04 LTS",
+      "Ubuntu Server 24.04 LTS",
+      "Red Hat Enterprise Linux (RHEL) 8",
+      "Red Hat Enterprise Linux (RHEL) 9",
+      "Rocky Linux 8 / 9",
+      "AlmaLinux 8 / 9",
+      "Debian 11 / 12"
+    ],
+    "hardware_requirements": {
+      "minimum": { "vcpu": "2", "ram_gb": "4", "storage_gb": "20", "network": "1 Gbps local NIC" },
+      "recommended": { "vcpu": "4", "ram_gb": "8", "storage_gb": "100", "network": "10 Gbps redundant NIC" }
+    },
+    "runtime_prerequisites": [
+      "Docker Engine 24.0+",
+      "Docker Compose v2.20+",
+      "UFW or Firewalld enabled"
+    ],
+    "database_architecture": {
+      "default_tier": {
+        "engine": "SQLite 3",
+        "storage_location": "Docker named volume (linkpass_data -> /app/data/linkpass.db)",
+        "use_case": "Small to Medium Enterprise deployments (Up to 500 active users)"
+      },
+      "scaled_tier": {
+        "engine": "PostgreSQL 15+",
+        "connection_string_pattern": "postgresql://linkpass_user:<PASSWORD>@<POSTGRES_HOST>:5432/linkpass_db",
+        "network_restriction": "localhost or internal-subnet only, TLS required",
+        "use_case": "High Availability Large Enterprise Clusters"
+      }
+    },
+    "networking_and_firewall": {
+      "inbound_ports": [
+        { "port": "443", "protocol": "TCP", "service": "HTTPS (FastAPI Backend API)", "visibility": "Internal Corporate Subnet / VPN Only" }
+      ],
+      "outbound_ports": [],
+      "airgap_compliance": "fully offline. Zero outbound internet calls required for core function."
+    }
+  },
+
+  "security_architecture": {
+    "licensing_verification": {
+      "required": true,
+      "cryptography": "RSA-2048 / RS256 algorithm via PyJWT signature verification",
+      "enforcement_point": "middleware check per request",
+      "failure_behavior": "Returns HTTP 403 Forbidden with license error payload"
+    },
+    "encryption_model": {
+      "data_at_rest": "AES-256-GCM Zero-Knowledge client-side vault encryption",
+      "data_in_transit": "TLS 1.3 / HTTPS (Port 443)",
+      "key_management": "Private key (linkpass_private_key.pem) resides exclusively on SecOps air-gapped machine; server only holds public key (license_pub.pem)"
+    },
+    "authentication": {
+      "primary": "Username + Master Password hash (Argon2id / PBKDF2)",
+      "mfa": "required (Mandatory RFC 6238 TOTP verification)",
+      "first_boot_bootstrap": "Initial superadmin account ('admin') TOTP secret is printed to console log on first container execution"
+    },
+    "host_hardening": {
+      "zero_source_code_shipped": true,
+      "process_isolation": "Backend process runs inside isolated container environment as non-privileged app instance",
+      "db_network_isolation": "Internal Docker bridge network or localhost only; non-routable externally"
+    },
+    "governance_and_audit": {
+      "high_risk_operations": ["Vault bulk export", "Superadmin role delegation", "SIEM log purge"],
+      "approval_model": "multi-admin quorum (threshold signature approval, e.g., 2 of 3 admins)",
+      "audit_log_retention_days": "90",
+      "siem_integration": true
+    }
+  },
+
+  "operational_lifecycle_workflows": {
+    "initial_deployment": [
+      "1. Transfer LinkPass-Linux-Server.zip to target host via SCP/SFTP",
+      "2. Extract bundle: unzip LinkPass-Linux-Server.zip -d LinkPass && cd LinkPass",
+      "3. Copy client license file into LinkPass/server/license.jwt",
+      "4. Start service: sudo docker compose up --build -d",
+      "5. Retrieve initial admin TOTP seed from logs: sudo docker compose logs server",
+      "6. Open required port 443 on host firewall (sudo ufw allow 443/tcp or firewall-cmd)",
+      "7. Distribute client bundle (LinkPass-Client.zip) and updated config.json to workstations"
+    ],
+    "update_or_renewal": [
+      "1. Generate new .lic file via KeyGen tool on air-gapped SecOps workstation",
+      "2. Replace LinkPass/server/license.jwt on Linux server host",
+      "3. Restart backend service: sudo docker compose restart server"
+    ],
+    "backup_and_recovery": [
+      "Database snapshot: Backup linkpass.db file or run pg_dump for PostgreSQL",
+      "Verification & restore: Use decrypt_backup.py CLI tool to extract and verify database backup integrity"
+    ]
+  },
+
+  "compliance_checklist": [
+    "No raw source code present on deployed hosts",
+    "No outbound internet calls required for core function",
+    "All secrets/keys excluded from version control and bundles",
+    "TLS enabled on all exposed ports",
+    "Audit logging enabled and retention period documented",
+    "Backup/recovery procedure tested"
+  ]
+}

@@ -1,0 +1,77 @@
+[
+  {
+    "vendor": "Cortex XDR",
+    "processes": ["cyserver.exe", "pmd.exe", "CyveraConsole.exe", "pmd"],
+    "services": ["CyveraService", "CyveraKernel"]
+  },
+  {
+    "vendor": "CrowdStrike Falcon",
+    "processes": ["CSFalconService.exe", "CSFalconContainer.exe", "falcon-sensor"],
+    "services": ["csagent", "CSFalconService", "falcon-sensor"]
+  },
+  {
+    "vendor": "Microsoft Defender",
+    "processes": ["MsMpEng.exe", "SecurityHealthService.exe", "NisSrv.exe", "mdatp"],
+    "services": ["WinDefend", "SecurityHealthService", "mdatp"]
+  },
+  {
+    "vendor": "Carbon Black",
+    "processes": ["cb.exe", "cbdaemon", "CbDefense.exe"],
+    "services": ["CarbonBlack", "cbdaemon", "CbDefenseService"]
+  },
+  {
+    "vendor": "SentinelOne",
+    "processes": ["SentinelAgent.exe", "SentinelServiceHost.exe", "sentineld"],
+    "services": ["SentinelAgent", "SentinelStaticEngine", "sentineld"]
+  },
+  {
+    "vendor": "Trend Micro Apex One",
+    "processes": ["TmListen.exe", "NTRtScan.exe"],
+    "services": ["TmCCSF", "tmlisten"]
+  },
+  {
+    "vendor": "Sophos",
+    "processes": ["SophosHealth.exe", "SSPService.exe", "sophos-live-protection"],
+    "services": ["Sophos Endpoint Defense", "SAVService", "sophos-live-protection"]
+  },
+  {
+    "vendor": "McAfee / Trellix",
+    "processes": ["McShield.exe", "mfemactl.exe", "masvc"],
+    "services": ["McAfeeFramework", "masvc", "mfemms"]
+  },
+  {
+    "vendor": "Symantec / Broadcom",
+    "processes": ["Smc.exe", "SmcGui.exe", "rtvscand"],
+    "services": ["SepMasterService", "SmcService", "rtvscand"]
+  },
+  {
+    "vendor": "Cylance",
+    "processes": ["CylanceSvc.exe", "CylanceUI.exe"],
+    "services": ["CylanceSvc"]
+  },
+  {
+    "vendor": "Elastic Security",
+    "processes": ["elastic-endpoint", "elastic-agent"],
+    "services": ["Elastic Endpoint", "ElasticEndpoint"]
+  },
+  {
+    "vendor": "Bitdefender GravityZone",
+    "processes": ["bdservicehost.exe", "bdagent.exe", "bdredline.exe"],
+    "services": ["UPDATESRV", "VSSERV", "EPRedirect"]
+  },
+  {
+    "vendor": "Kaspersky",
+    "processes": ["avp.exe", "klnagent.exe"],
+    "services": ["AVP22", "klnagent"]
+  },
+  {
+    "vendor": "ESET",
+    "processes": ["ekrn.exe", "egui.exe", "esets_daemon"],
+    "services": ["ekrn", "esets_daemon"]
+  },
+  {
+    "vendor": "Malwarebytes",
+    "processes": ["MBAMService.exe", "mbam.exe"],
+    "services": ["MBAMService", "MBAMProtection"]
+  }
+]

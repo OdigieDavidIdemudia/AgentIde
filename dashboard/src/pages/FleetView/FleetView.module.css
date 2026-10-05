@@ -1,0 +1,106 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.status {
+  font-family: var(--font-body);
+  font-size: var(--font-sm);
+}
+
+.online { color: var(--pass); }
+.offline { color: var(--fail); }
+
+/* Empty State */
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-2xl);
+  text-align: center;
+  background-color: var(--surface);
+  border: var(--border-width) dashed var(--border);
+  border-radius: 4px;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-xl);
+}
+
+.installCommand {
+  background-color: var(--bg);
+  padding: var(--spacing-md);
+  border-radius: 4px;
+  border: var(--border-width) solid var(--border);
+  margin-top: var(--spacing-sm);
+}
+
+/* Table */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.table th {
+  padding: var(--spacing-md);
+  border-bottom: var(--border-width) solid var(--border);
+  font-family: var(--font-heading);
+  color: var(--text-secondary);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  background-color: var(--surface);
+}
+
+.table td {
+  padding: var(--spacing-md);
+  border-bottom: var(--border-width) solid var(--border);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.hostname {
+  font-weight: 600;
+}
+
+.mono {
+  font-family: var(--font-body);
+  color: var(--text-secondary);
+}
+
+.vendorBadge {
+  background-color: var(--bg);
+  padding: var(--spacing-xxs) var(--spacing-xs);
+  border-radius: 4px;
+  border: var(--border-width) solid var(--border);
+  font-size: var(--font-sm);
+}
+
+.noVendor {
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: var(--font-sm);
+}
+
+.statusBadge {
+  font-size: var(--font-xs);
+  padding: var(--spacing-xxs) var(--spacing-xs);
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.online { background-color: rgba(0, 212, 170, 0.1); color: var(--pass); }
+.offline { background-color: rgba(255, 77, 77, 0.1); color: var(--fail); }
+
+.actions {
+  text-align: right;
+}

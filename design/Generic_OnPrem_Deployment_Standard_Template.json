@@ -1,0 +1,154 @@
+{
+  "$schema": "generic-onprem-deployment-standard-v1",
+  "meta": {
+    "name": "<PROJECT_NAME> Connected On-Premises Deployment Specification",
+    "version": "1.0.0",
+    "target_architecture": "Enterprise Connected On-Premises Infrastructure (RHEL)",
+    "last_updated": "<YYYY-MM-DD>",
+    "author": "Generic Enterprise Standard",
+    "description": "Standard architectural requirements, packaging bundles, security constraints, and operational workflows for deploying enterprise applications in internet-connected on-premises environments."
+  },
+  "core_principles": [
+    "Zero-Knowledge / Least Privilege: The application server must operate with the minimum required privileges and avoid handling unencrypted sensitive material whenever possible.",
+    "Connected Autonomy: The application operates on-premises but leverages outbound internet access for automated updates, telemetry, and online license verification.",
+    "Portability: Single-command deployment using container orchestration (e.g., Docker Compose or Kubernetes) across standard enterprise Linux distributions.",
+    "Immutable Infrastructure: No raw source code shipped to production hosts. Only compiled binaries, container images, or minified assets are distributed.",
+    "Comprehensive Auditability: All security-relevant actions, access attempts, and state changes must be recorded in an immutable log suitable for SIEM integration."
+  ],
+  "packaging_strategy": {
+    "bundles": [
+      {
+        "bundle_id": "<PROJECT_NAME>-server-deployment",
+        "target": "Connected On-Premises Server (RHEL)",
+        "contents": [
+          "Container images (pulled directly from private registry)",
+          "Orchestration manifests (docker-compose.yml)",
+          "Configuration templates (.env.example)"
+        ],
+        "installation_method": "Clone repo/manifests, configure .env with online license token, run docker compose pull && docker compose up -d"
+      },
+      {
+        "bundle_id": "<PROJECT_NAME>-client-bundle",
+        "target": "End-user Workstations (If Applicable)",
+        "contents": [
+          "Compiled executable, MSI, or macOS DMG",
+          "Centralized configuration file pointing to on-prem server endpoint"
+        ],
+        "installation_method": "Distribute via MDM (Intune/Jamf) or manual install, launch application"
+      }
+    ]
+  },
+  "infrastructure_spec": {
+    "supported_operating_systems": [
+      "Red Hat Enterprise Linux (RHEL) 8 / 9"
+    ],
+    "hardware_requirements": {
+      "minimum": {
+        "vcpu": 2,
+        "ram_gb": 4,
+        "storage_gb": 20,
+        "network": "1 Gbps local NIC, Outbound HTTPS Access"
+      },
+      "recommended": {
+        "vcpu": 4,
+        "ram_gb": 8,
+        "storage_gb": 100,
+        "network": "10 Gbps redundant NIC, Outbound HTTPS Access"
+      }
+    },
+    "runtime_prerequisites": [
+      "Docker Engine 24.0+",
+      "Docker Compose v2.20+",
+      "UFW or Firewalld enabled"
+    ],
+    "database_architecture": {
+      "standard_tier": {
+        "engine": "Embedded Database (e.g., SQLite via Docker Volume)",
+        "storage_location": "Docker named volume (e.g., /var/lib/docker/volumes/app_data)",
+        "use_case": "Small to Medium Enterprise deployments"
+      },
+      "enterprise_ha_tier": {
+        "engine": "Standalone RDBMS (e.g., PostgreSQL / MySQL)",
+        "network_restriction": "localhost or internal-subnet only, TLS required",
+        "use_case": "High Availability Large Enterprise Clusters"
+      }
+    },
+    "networking_and_firewall": {
+      "inbound_ports": [
+        {
+          "port": 443,
+          "protocol": "TCP",
+          "service": "HTTPS (Backend API / Web UI)",
+          "visibility": "Internal Corporate Subnet / VPN Only"
+        }
+      ],
+      "outbound_ports": [
+        {
+          "port": 443,
+          "protocol": "TCP",
+          "service": "HTTPS (Updates, Telemetry, Licensing)",
+          "visibility": "External Internet"
+        }
+      ],
+      "airgap_compliance": "Internet-connected deployment. Requires outbound HTTPS access to specific vendor endpoints for updates and telemetry."
+    }
+  },
+  "security_architecture": {
+    "encryption_model": {
+      "data_in_transit": "TLS 1.3 / HTTPS strictly enforced on all exposed ports.",
+      "data_at_rest": "AES-256-GCM encryption for persistent volumes or sensitive DB rows.",
+      "key_management": "Master keys derived securely; asymmetric public keys residing on the server, private keys residing offline."
+    },
+    "authentication_and_authorization": {
+      "primary_auth": "Argon2id / PBKDF2 password hashing.",
+      "mfa": "Mandatory TOTP (RFC 6238) or enterprise SAML/SSO integration.",
+      "first_boot_bootstrap": "Initial superadmin credentials printed to secure console log on first execution.",
+      "rbac": "Strict Role-Based Access Control enforcing Separation of Duties."
+    },
+    "governance_and_audit": {
+      "high_risk_operations": [
+        "Vault bulk export",
+        "Superadmin role delegation",
+        "Audit log purge"
+      ],
+      "approval_model": "Multi-admin quorum (e.g., 2-of-3 Admins required) for destructive actions.",
+      "audit_logs": "90-day minimum retention period with syslog/JSON output for SIEM integration."
+    }
+  },
+  "operational_lifecycle_workflows": {
+    "initial_deployment": [
+      {
+        "workflow_type": "GitOps / Connected Environments",
+        "steps": [
+          "1. Authenticate to the private repository or container registry on the target server.",
+          "2. Clone the deployment repository or fetch the Docker Compose manifests.",
+          "3. Configure environment variables (.env), online license token, and TLS certificates.",
+          "4. Execute deployment command (e.g., sudo docker compose up -d).",
+          "5. Retrieve initial bootstrap admin credentials from secure console logs.",
+          "6. Open Port 443 on host firewall (Firewalld)."
+        ]
+      }
+    ],
+    "updates_and_renewals": [
+      {
+        "workflow_type": "GitOps / Connected Environments",
+        "steps": [
+          "1. Pull the latest changes from the deployment branch or fetch new container tags.",
+          "2. Rebuild or restart containers (sudo docker compose pull && sudo docker compose up -d)."
+        ]
+      }
+    ],
+    "backup_and_recovery": [
+      "Backup: Snapshot database volumes or execute native DB dumps (e.g., pg_dump).",
+      "Restore: Offline verification of backup integrity via disaster recovery scripts."
+    ]
+  },
+  "compliance_checklist": [
+    "No raw source code present on deployed hosts.",
+    "Outbound internet access restricted to required vendor endpoints (updates/licensing) only.",
+    "All secrets/keys excluded from version control and bundles.",
+    "TLS enabled on all exposed ports.",
+    "Audit logging enabled and retention period documented.",
+    "Backup/recovery procedure tested."
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "meta": {
+    "name": "Personal Admin Panel Standard",
+    "version": "1.0",
+    "purpose": "A baseline set of functional features and UI conventions every admin/management section of any future project must include, regardless of the app's domain. This is a companion file to personal-design-standard.json \u2014 that file governs visual language (typography, color, signature elements); this file governs what the admin experience must functionally contain and how data-heavy screens should behave.",
+    "relationship_to_design_standard": "Every screen described here must still follow personal-design-standard.json for typography, color derivation, empty-state handling, and the anti_patterns list. Example violation caught in practice: an admin screenshot for a different project used a violet/indigo accent \u2014 that color is explicitly banned in personal-design-standard.json.anti_patterns. Apply both files together."
+  },
+
+  "user_management_module": {
+    "status": "REQUIRED in every project that has more than one role or any concept of a login.",
+    "baseline_features": [
+      {"feature": "Create user", "notes": "Admin can create a user directly (set name, email, role, and any org-structure assignment like team/unit/department) rather than only supporting self-signup."},
+      {"feature": "Invite user", "notes": "Optional alternative to direct creation \u2014 send an invite link/email that lets the person set their own password. Prefer this over admin-set temporary passwords when email is available."},
+      {"feature": "Edit user", "notes": "Change name, email, role, org assignment after creation."},
+      {"feature": "Deactivate / reactivate user", "notes": "Soft-disable rather than hard-delete by default, so historical records (their past actions, submissions, etc.) stay intact. Deactivated users cannot log in; existing sessions/tokens are invalidated immediately on deactivation."},
+      {"feature": "Unlock account", "notes": "See account_security.lockout_policy \u2014 admin must be able to manually unlock an account that's been locked out from failed login attempts, not just wait for auto-expiry."},
+      {"feature": "Reset password", "notes": "Admin can trigger a password reset (send reset link) for a user who's locked out or forgot their password. Admin should not be able to see or set a user's password in plaintext."},
+      {"feature": "Assign/change role", "notes": "Role changes take effect immediately; if the app uses stateless tokens (JWT), the change should be reflected on next request via a role check against the DB, not just trusted from a stale token."},
+      {"feature": "View last login / activity", "notes": "Each user row shows last login timestamp at minimum, so an admin can spot accounts that have never logged in (stuck invites) or gone stale."},
+      {"feature": "Search and filter users", "notes": "By name/email at minimum; by role and status (active/deactivated/locked) where the user list is large enough to need it."}
+    ]
+  },
+
+  "account_security": {
+    "lockout_policy": {
+      "trigger": "Lock the account after N consecutive failed login attempts (default suggestion: 5).",
+      "auto_unlock": "Optionally auto-unlock after a cooldown window (e.g. 15\u201330 minutes) so a genuine user isn't permanently stuck without admin involvement.",
+      "manual_unlock": "Admin can always manually unlock immediately, regardless of the cooldown \u2014 this must be a visible, one-click action on the user's row/profile, not buried in a settings page.",
+      "visibility": "A locked account must be visually distinguishable in the user list (a status badge, per personal-design-standard.json badge conventions \u2014 color plus text label, never color alone)."
+    },
+    "password_and_session_rules": [
+      "Passwords are always stored hashed (never plaintext, never reversible encryption).",
+      "Deactivating a user immediately invalidates their active sessions/tokens \u2014 they should not be able to keep using the app until a token naturally expires.",
+      "Role changes and deactivation should be checked against current DB state on protected requests, not solely trusted from a token's claims if the token has a long lifetime."
+    ]
+  },
+
+  "roles_and_permissions_baseline": {
+    "principle": "Every project defines roles explicitly (even a 2-role project: admin + user) and documents what each role can see/do, mirroring the pattern used in a project's own spec (roles + permissions list). Do not leave permission boundaries implicit in code with no documented source of truth.",
+    "superadmin_or_top_role_expectations": "Whatever the top-level role is called (admin, superadmin, owner), it must be able to: manage all users (per user_management_module), view system-wide data, and manage the org-structure entities the app is built around (e.g. teams/departments/categories/projects \u2014 whatever the app's core grouping concept is)."
+  },
+
+  "admin_ui_conventions": {
+    "data_tables_and_lists": {
+      "required_elements": [
+        "Column headers that are always visible (sticky if the list scrolls).",
+        "Row-level actions (edit, deactivate, view detail) either inline or via a row menu \u2014 never require navigating away just to see what actions exist.",
+        "Search/filter bar above any list expected to exceed ~15-20 rows.",
+        "Pagination or infinite scroll once a list can realistically grow past one screen \u2014 decide which up front rather than shipping neither."
+      ],
+      "empty_states": {
+        "rule": "A table with zero rows must never render as a bare header with dead space below it (see the AssetPulse Categories screenshot for the failure mode: header row, then nothing). It must show a clear message plus the primary action to fix it, e.g. 'No categories yet \u2014 create your first one' with the create button restated inline, not just relying on the button already in the page header.",
+        "rationale": "An empty table with no guidance reads as broken, not as 'nothing here yet'. This is the single most common admin-UI mistake and is explicitly disallowed."
+      }
+    },
+    "navigation": {
+      "breadcrumbs": "Any nested admin screen (e.g. Section / Subsection) shows a breadcrumb trail, consistent with however the rest of the app's information architecture is described in that project's own spec.",
+      "active_state": "The current section is visually distinguished in the nav (per personal-design-standard.json's accent-color rules \u2014 used deliberately, not as a wash)."
+    },
+    "forms_within_admin": {
+      "rule": "Creation/edit forms follow personal-design-standard.json's forms section (labels above inputs, inline validation) \u2014 no separate rule needed here, just confirming it applies to admin CRUD forms specifically, which is where it's most often skipped in practice."
+    },
+    "bulk_actions": {
+      "when_required": "Once a list is expected to regularly exceed ~10 items an admin might act on together (e.g. deactivate 5 users at once), support multi-select plus a bulk action bar. Not required for lists that are inherently small (e.g. a company's list of Groups, capped at a handful)."
+    },
+    "confirmation_for_destructive_actions": "Any action that deletes data or removes access (delete, deactivate, revoke) requires an explicit confirmation step (dialog or type-to-confirm for the most destructive ones) \u2014 never a single click with no confirmation."
+  },
+
+  "audit_and_activity": {
+    "minimum_bar": "Even without a full audit log module, every admin-manageable entity (users, and whatever the project's core entities are) should track created_at and, where the entity can be modified, an updated_at timestamp. This is the cheap baseline; a full activity/audit feed (who did what, when) is a project-by-project decision, not a mandatory baseline \u2014 evaluate per project whether compliance/accountability needs justify it."
+  },
+
+  "process_checklist": {
+    "instructions": "Run through when scaffolding the admin/management side of any new project.",
+    "steps": [
+      "1. Define roles explicitly, even if there are only two.",
+      "2. Scaffold the User Management screen with every feature in user_management_module.baseline_features \u2014 create, invite, edit, deactivate/reactivate, unlock, reset password, role assignment, last-login visibility, search/filter.",
+      "3. Implement lockout_policy: failed-attempt threshold, optional auto-unlock cooldown, and a one-click manual unlock for admins.",
+      "4. For every data table/list in the admin area: confirm pagination-or-infinite-scroll is decided, and write the empty state copy before shipping \u2014 do not leave a table that can legitimately render with zero rows without one.",
+      "5. Add confirmation steps to every destructive action.",
+      "6. Cross-check every admin screen against personal-design-standard.json (typography, color derivation, anti_patterns) \u2014 admin screens are exactly where generic dark-dashboard defaults tend to creep back in."
+    ]
+  }
+}

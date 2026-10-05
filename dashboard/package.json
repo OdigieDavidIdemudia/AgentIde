@@ -1,0 +1,34 @@
+{
+  "name": "agentide-dashboard",
+  "version": "0.1.0",
+  "description": "AgentIde Central Dashboard — EDR/XDR POC Assessment Framework",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "node --watch server/index.js",
+    "dev:client": "vite",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "db:migrate": "node server/db.js migrate",
+    "cert:generate": "node scripts/generate-cert.js",
+    "test": "node --test server/"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^18.0.4",
+    "express": "^4.19.2",
+    "pg": "^8.12.0",
+    "react-markdown": "^10.1.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.2",
+    "concurrently": "^9.0.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2",
+    "selfsigned": "^2.4.1",
+    "vite": "^5.4.8"
+  }
+}

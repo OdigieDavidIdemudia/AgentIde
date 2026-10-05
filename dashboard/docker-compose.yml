@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: agentide_postgres
+    environment:
+      POSTGRES_USER: agentide
+      POSTGRES_PASSWORD: agentide_password
+      POSTGRES_DB: agentide
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  dashboard:
+    build: .
+    container_name: agentide_dashboard
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+    env_file:
+      - ../.env
+    environment:
+      # Override .env values with the compose service name
+      PGHOST: postgres
+      PGUSER: agentide
+      PGPASSWORD: agentide_password
+      PGDATABASE: agentide
+
+volumes:
+  pgdata:

@@ -1,0 +1,114 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import './tokens.css';
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: var(--font-base);
+  line-height: var(--lh-body);
+  transition: background-color 0.2s, color 0.2s;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 400;
+  line-height: var(--lh-tight);
+}
+
+h1 { font-size: var(--font-3xl); }
+h2 { font-size: var(--font-2xl); }
+h3 { font-size: var(--font-xl); }
+
+a {
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+button {
+  font-family: var(--font-heading);
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+/* Base App Layout */
+#root {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.main-content {
+  flex: 1;
+  padding: var(--spacing-2xl);
+  overflow-y: auto;
+}
+
+/* Utility Classes */
+.card {
+  background-color: var(--surface);
+  border: var(--border-width) solid var(--border);
+  border-radius: 4px;
+  box-shadow: var(--shadow-ambient);
+  padding: var(--spacing-lg);
+}
+
+.divider {
+  height: 1px;
+  background-color: var(--border);
+  margin: var(--spacing-xl) 0;
+}
+
+.btn-primary {
+  background-color: var(--accent);
+  color: var(--n-900);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  font-size: var(--font-base);
+  font-weight: 600;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-hover);
+}
+
+.btn-secondary {
+  background-color: transparent;
+  color: var(--n-300);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  font-size: var(--font-base);
+  font-weight: 500;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  transition: border-color 0.15s, color 0.15s;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  border-color: var(--n-400);
+  color: var(--n-100);
+}
+
+.btn-danger {
+  background-color: transparent;
+  color: #ff0055;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  font-size: var(--font-base);
+  font-weight: 600;
+  border-radius: 4px;
+  border: 1px solid #ff0055;
+  transition: background-color 0.15s;
+  cursor: pointer;
+}
+
+.btn-danger:hover {
+  background-color: rgba(255, 0, 85, 0.1);
+}

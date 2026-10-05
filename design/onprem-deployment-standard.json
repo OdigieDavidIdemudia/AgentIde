@@ -1,0 +1,162 @@
+{
+  "$schema": "onprem-deployment-standard-v1",
+  "meta": {
+    "name": "<PROJECT_NAME> On-Premises Deployment Specification",
+    "version": "1.0.0",
+    "target_architecture": "Enterprise Air-Gapped & Private VPC Infrastructure",
+    "last_updated": "<YYYY-MM-DD>",
+    "author": "SyncGlide Enterprise",
+    "description": "Standard architectural requirements, packaging bundles, security constraints, and operational workflows for deploying <PROJECT_NAME> in isolated on-premises enterprise environments."
+  },
+
+  "core_principles": [
+    "Zero-Knowledge First: server never handles unencrypted client secrets or private key material",
+    "Zero Source Code Shipped: only compiled binaries, container images, or minified static assets are distributed — no raw source",
+    "Air-Gapped Autonomy: zero required internet dependencies; licensing (if any) verified offline",
+    "Deployment Flexibility: support at least one containerized and/or one host-native install path",
+    "Auditability: security-relevant actions are logged with a defined retention period"
+  ],
+
+  "deployment_strategy": {
+    "chosen_method": "<containerized | host_native | both>",
+    "rationale": "<why this method fits the target environment>"
+  },
+
+  "packaging_strategy": {
+    "bundles": [
+      {
+        "bundle_id": "<PROJECT>-server-bundle.zip",
+        "target": "Enterprise On-Premises Server",
+        "contents": [
+          "<backend artifact(s) — compiled binary or container source>",
+          "<config/env template>",
+          "<TLS cert placeholder or cert directory>",
+          "<orchestration file: docker-compose.yml OR systemd unit + install script>",
+          "docs/deployment_guide.md"
+        ],
+        "installation_method": "<one-line install command>"
+      },
+      {
+        "bundle_id": "<PROJECT>-client-bundle.zip",
+        "target": "End-user workstations (if applicable)",
+        "contents": [
+          "<client executable or static frontend assets>",
+          "config.json (server endpoint pointer)",
+          "<trust bundle if custom CA>"
+        ],
+        "installation_method": "<one-line install/config steps>"
+      },
+      {
+        "bundle_id": "<PROJECT>-admin-tooling.zip",
+        "target": "Security/Admin workstation (air-gapped, optional)",
+        "contents": [
+          "<license/key generation tool, if licensing is used>",
+          "<private key material — KEEP CONFIDENTIAL>"
+        ],
+        "installation_method": "<run on secure, offline machine only>"
+      }
+    ]
+  },
+
+  "build_pipeline": {
+    "build_environment": "Build server/VM matching target OS architecture",
+    "steps": {
+      "frontend": ["<install deps>", "<build command>"],
+      "backend": ["<install deps>", "<compile/package command>"],
+      "packaging": ["<script that assembles final bundle(s)>"]
+    }
+  },
+
+  "infrastructure_spec": {
+    "supported_operating_systems": [
+      "<list of supported distros/versions>"
+    ],
+    "hardware_requirements": {
+      "minimum": { "vcpu": "<n>", "ram_gb": "<n>", "storage_gb": "<n>", "network": "<spec>" },
+      "recommended": { "vcpu": "<n>", "ram_gb": "<n>", "storage_gb": "<n>", "network": "<spec>" }
+    },
+    "runtime_prerequisites": [
+      "<e.g. Docker Engine X+, or Nginx + systemd, or JVM version, etc.>"
+    ],
+    "database_architecture": {
+      "default_tier": {
+        "engine": "<e.g. SQLite>",
+        "storage_location": "<path or volume>",
+        "use_case": "<expected scale>"
+      },
+      "scaled_tier": {
+        "engine": "<e.g. PostgreSQL>",
+        "connection_string_pattern": "<template>",
+        "network_restriction": "localhost or internal-subnet only, TLS required",
+        "use_case": "<expected scale>"
+      }
+    },
+    "networking_and_firewall": {
+      "inbound_ports": [
+        { "port": "<n>", "protocol": "TCP", "service": "<name>", "visibility": "Internal Corporate Subnet / VPN Only" }
+      ],
+      "outbound_ports": [],
+      "airgap_compliance": "<fully offline | requires specific outbound allowlist>"
+    }
+  },
+
+  "security_architecture": {
+    "licensing_verification": {
+      "required": "<true | false>",
+      "cryptography": "<e.g. RSA-2048 / RS256, if applicable>",
+      "enforcement_point": "<middleware check per request | startup check | periodic check>",
+      "failure_behavior": "<e.g. 403 on API, or process exits>"
+    },
+    "encryption_model": {
+      "data_at_rest": "<method>",
+      "data_in_transit": "<TLS version/config>",
+      "key_management": "<where keys live, who can access them>"
+    },
+    "authentication": {
+      "primary": "<method>",
+      "mfa": "<required | optional | none>",
+      "first_boot_bootstrap": "<how initial admin access is granted>"
+    },
+    "host_hardening": {
+      "zero_source_code_shipped": true,
+      "process_isolation": "<service runs as non-root user, restricted systemd directives, etc.>",
+      "db_network_isolation": "<localhost/internal only>"
+    },
+    "governance_and_audit": {
+      "high_risk_operations": ["<e.g. full data export, admin role change>"],
+      "approval_model": "<single-admin | multi-admin quorum | none>",
+      "audit_log_retention_days": "<n>",
+      "siem_integration": "<true/false, format if true>"
+    }
+  },
+
+  "operational_lifecycle_workflows": {
+    "initial_deployment": [
+      "1. Transfer bundle to target host via SCP/SFTP",
+      "2. Extract bundle",
+      "3. <license/config step, if applicable>",
+      "4. Start service (<docker compose up -d | systemctl start ... | other>)",
+      "5. Retrieve initial admin credentials/seed from logs",
+      "6. Open required port(s) on host firewall",
+      "7. Distribute client bundle/config to workstations, if applicable"
+    ],
+    "update_or_renewal": [
+      "1. <how new versions/licenses are generated>",
+      "2. Replace artifact/config on host",
+      "3. Restart service"
+    ],
+    "backup_and_recovery": [
+      "<backup method: DB dump, volume snapshot, etc.>",
+      "<verification/restore procedure>"
+    ]
+  },
+
+  "compliance_checklist": [
+    "No raw source code present on deployed hosts",
+    "No outbound internet calls required for core function",
+    "All secrets/keys excluded from version control and bundles",
+    "TLS enabled on all exposed ports",
+    "Audit logging enabled and retention period documented",
+    "Backup/recovery procedure tested"
+  ]
+}

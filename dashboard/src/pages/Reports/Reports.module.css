@@ -1,0 +1,188 @@
+﻿.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.agentTabs {
+  display: flex;
+  gap: var(--spacing-xs);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--spacing-lg);
+}
+
+.tab {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--n-400);
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 150ms;
+  margin-bottom: -1px;
+}
+
+.tab:hover {
+  color: var(--n-100);
+}
+
+.tabActive {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-2xl);
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  text-align: center;
+}
+
+.emptyState p {
+  color: var(--n-400);
+  margin-top: var(--spacing-xs);
+}
+
+/* Summary row */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.summaryCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+
+.summaryLabel {
+  font-size: 0.75rem;
+  color: var(--n-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--spacing-xxs);
+}
+
+.summaryValue {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.summaryValue.pass { color: #06d6a0; }
+.summaryValue.fail { color: #ef476f; }
+.summaryValue.warn { color: #ffd166; }
+.summaryValue.neutral { color: var(--n-200); }
+
+/* Section */
+.section {
+  margin-bottom: var(--spacing-lg);
+}
+
+.sectionTitle {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--n-500);
+  margin-bottom: var(--spacing-sm);
+  padding-bottom: var(--spacing-xs);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Finding rows */
+.findingRow {
+  display: grid;
+  grid-template-columns: 80px 1fr 120px 100px;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid var(--border);
+  align-items: start;
+  font-size: 0.83rem;
+  transition: background 80ms;
+}
+
+.findingRow:hover {
+  background: var(--surface);
+}
+
+.findingRow:last-child {
+  border-bottom: none;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px var(--spacing-xs);
+  border-radius: 3px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.badgePASS   { background: rgba(6,214,160,0.15); color: #06d6a0; border: 1px solid rgba(6,214,160,0.3); }
+.badgeFAIL   { background: rgba(239,71,111,0.15); color: #ef476f; border: 1px solid rgba(239,71,111,0.3); }
+.badgeBLOCKED{ background: rgba(255,0,85,0.15);   color: #ff0055; border: 1px solid rgba(255,0,85,0.3); }
+.badgeFIXED  { background: rgba(255,209,102,0.15);color: #ffd166; border: 1px solid rgba(255,209,102,0.3); }
+.badgeINFO   { background: rgba(150,150,150,0.1);  color: var(--n-400); border: 1px solid var(--border); }
+
+.typeBadge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.typeWhitebox { background: rgba(0,200,255,0.1); color: #00c8ff; border: 1px solid rgba(0,200,255,0.2); }
+.typeBlackbox { background: rgba(255,140,0,0.1); color: #ff8c00; border: 1px solid rgba(255,140,0,0.2); }
+.typeInternal { background: rgba(150,150,150,0.1); color: var(--n-500); border: 1px solid var(--border); }
+
+.findingTitle {
+  color: var(--n-200);
+  font-weight: 500;
+}
+
+.findingDetail {
+  font-size: 0.75rem;
+  color: var(--n-500);
+  margin-top: 2px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.tamperRow {
+  background: rgba(255, 0, 85, 0.04);
+  border-left: 3px solid #ff0055;
+  padding-left: calc(var(--spacing-md) - 3px);
+}
+
+.mitre {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--n-600);
+}

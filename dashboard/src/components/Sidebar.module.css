@@ -1,0 +1,86 @@
+.sidebar {
+  width: 260px;
+  background-color: var(--surface);
+  border-right: var(--border-width) solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: var(--spacing-xl) 0;
+}
+
+.logoContainer {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--spacing-xl);
+  margin-bottom: var(--spacing-2xl);
+  gap: var(--spacing-sm);
+}
+
+.logoMark {
+  width: 32px;
+  height: 32px;
+  background-color: var(--accent);
+  color: var(--n-900);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: var(--font-lg);
+}
+
+.logoText {
+  font-size: var(--font-lg);
+  font-weight: 400;
+  letter-spacing: -0.5px;
+}
+
+.nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.navItem {
+  padding: var(--spacing-md) var(--spacing-xl);
+  font-family: var(--font-heading);
+  font-size: var(--font-base);
+  color: var(--text-secondary);
+  border-left: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.navItem:hover {
+  background-color: var(--bg);
+  color: var(--text-primary);
+}
+
+.active {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  background-color: transparent;
+}
+
+.footer {
+  padding: 0 var(--spacing-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.themeToggle {
+  text-align: left;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: var(--font-sm);
+}
+
+.themeToggle:hover {
+  color: var(--text-primary);
+}
+
+.version {
+  color: var(--n-500);
+  font-size: var(--font-xs);
+  font-family: var(--font-body);
+}

@@ -1,0 +1,16 @@
+# ── Secrets & local config ────────────────────────────────────────────
+.env
+dashboard/certs/
+agent/config.json
+
+# ── Dependencies & build output ───────────────────────────────────────
+node_modules/
+dist/
+
+# ── Compiled binaries & installers ────────────────────────────────────
+agent/agentide.exe
+agent/agentide_linux
+agent/AgentIDE_Installer*.exe
+
+# ── Logs & scratch ────────────────────────────────────────────────────
+*.log

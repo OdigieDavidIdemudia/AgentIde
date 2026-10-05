@@ -1,0 +1,158 @@
+{
+  "$schema": "linkpass-deployment-standard-v1",
+  "meta": {
+    "name": "LinkPass On-Premises Deployment & Packaging Specification",
+    "version": "1.0.0",
+    "target_architecture": "Enterprise Air-Gapped & Private VPC Infrastructure",
+    "last_updated": "2026-08-08",
+    "author": "David Idemudia Odigie (LinkPass / AssetPulse)",
+    "description": "Defines the standard architectural requirements, packaging bundles, security constraints, and operational workflows for deploying LinkPass in isolated on-premises enterprise environments."
+  },
+
+  "core_principles": [
+    "Zero-Knowledge First: Server never handles unencrypted client secrets or private key material.",
+    "Air-Gapped Autonomy: Zero external internet dependencies; license verification must operate completely offline using asymmetric RSA public-key signatures.",
+    "Containerized Portability: Single-command deployment using Docker Compose across Linux distributions (Ubuntu, RHEL, Rocky, AlmaLinux).",
+    "Strict Governance & Quorum: High-stakes operations (such as full vault export) require multi-admin TOTP quorum approvals.",
+    "SIEM-Ready Auditing: All access, view, copy, and export attempts must be recorded in an immutable 90-day retention log."
+  ],
+
+  "packaging_strategy": {
+    "bundles": [
+      {
+        "bundle_id": "LinkPass-Linux-Server.zip",
+        "target": "Enterprise On-Premises Server",
+        "contents": [
+          "server/ (FastAPI backend source code, routers, middleware)",
+          "server/Dockerfile (Python 3.11 container manifest)",
+          "server/license_pub.pem (Production RSA Public Key for JWT license verification)",
+          "server/certs/ (SSL/TLS self-signed or enterprise CA certificates)",
+          "docker-compose.yml (Orchestration with SQLite default & PostgreSQL HA toggle)",
+          "docs/linux_deployment_guide.md (Step-by-step deployment instructions)"
+        ],
+        "installation_method": "Unpack zip -> Place license.jwt in server/ -> Run docker compose up --build -d"
+      },
+      {
+        "bundle_id": "LinkPass-Client.zip",
+        "target": "Enterprise Windows Desktop Workstations",
+        "contents": [
+          "LinkPass.exe (Standalone PyInstaller executable, zero runtime installation required)",
+          "config.json (Server endpoint pointer: {\"server_url\": \"https://<SERVER_IP>:443\"})",
+          "cacert.pem (Custom enterprise TLS trust bundle if using internal CA)"
+        ],
+        "installation_method": "Uncompress -> Edit config.json with server IP -> Run LinkPass.exe"
+      },
+      {
+        "bundle_id": "KeyGen.zip",
+        "target": "Security Operations / Key Management Machine (Air-Gapped)",
+        "contents": [
+          "KeyGen/main.py (Tkinter GUI tool for license creation)",
+          "KeyGen/linkpass_private_key.pem (RSA 2048-bit Private Key - KEEP CONFIDENTIAL)",
+          "KeyGen/Linkpass/generate_linkpass_license.py (CLI & PyJWT signing module)",
+          "KeyGen/Linkpass/req.txt (License schema notes and criteria)"
+        ],
+        "installation_method": "Run main.py on secure admin workstation -> Generate client `.lic` files"
+      }
+    ]
+  },
+
+  "infrastructure_spec": {
+    "supported_operating_systems": [
+      "Ubuntu Server 20.04 / 22.04 / 24.04 LTS",
+      "Red Hat Enterprise Linux (RHEL) 8 / 9",
+      "Rocky Linux 8 / 9 / AlmaLinux 8 / 9",
+      "Debian 11 / 12"
+    ],
+    "hardware_requirements": {
+      "minimum": {
+        "vcpu": 2,
+        "ram_gb": 4,
+        "storage_gb": 20,
+        "network": "1 Gbps local NIC"
+      },
+      "recommended_enterprise": {
+        "vcpu": 4,
+        "ram_gb": 8,
+        "storage_gb": 100,
+        "network": "10 Gbps redundant NIC"
+      }
+    },
+    "runtime_prerequisites": [
+      "Docker Engine 24.0+",
+      "Docker Compose v2.20+",
+      "UFW or Firewalld enabled"
+    ],
+    "database_architectures": {
+      "tier_1_standard": {
+        "engine": "SQLite 3",
+        "storage": "Docker Named Volume (linkpass_data -> /app/data/linkpass.db)",
+        "use_case": "Small to Medium Enterprises (Up to 500 users, single server node)"
+      },
+      "tier_2_enterprise_ha": {
+        "engine": "PostgreSQL 15+",
+        "connection_string": "postgresql://linkpass_user:<PASSWORD>@<POSTGRES_HOST>:5432/linkpass_db",
+        "use_case": "Large Enterprise Clusters / High Availability Load Balanced Setups"
+      }
+    },
+    "networking_and_firewall": {
+      "inbound_ports": [
+        {
+          "port": 443,
+          "protocol": "TCP",
+          "service": "HTTPS (FastAPI Backend API)",
+          "visibility": "Internal Corporate Subnet / VPN Only"
+        }
+      ],
+      "outbound_ports": [],
+      "airgap_compliance": "100% Offline. Zero outbound connections to external public internet endpoints."
+    }
+  },
+
+  "security_and_licensing_architecture": {
+    "licensing_verification": {
+      "cryptography": "Asymmetric RSA-2048 with RS256 algorithm",
+      "public_key_location": "/app/server/license_pub.pem",
+      "license_file_name": "/app/server/license.jwt",
+      "middleware_enforcement": "Every incoming API call evaluates license status (validity, expiration, signature verification). Returns 403 Forbidden on expired or tampered license.",
+      "claims_schema": {
+        "iss": "AssetPulse-KeyGen",
+        "sub": "LinkPass-Enterprise-License",
+        "client_name": "String (Enterprise Customer Name)",
+        "allowed_seats": "Integer (Maximum registered user cap)",
+        "exp": "Unix Timestamp (Expiration Date)",
+        "features": "Array of strings ([\"quorum_export\", \"siem_audit\", \"totp_enforced\"])"
+      }
+    },
+    "zero_knowledge_model": {
+      "encryption": "AES-256-GCM client-side encryption",
+      "master_key": "Derived client-side via Argon2id / PBKDF2. Never sent to or stored on server."
+    },
+    "authentication": {
+      "primary": "Username + Master Password hash",
+      "mfa": "Mandatory TOTP (RFC 6238) seed required on every login",
+      "first_boot_bootstrap": "Initial deployment generates admin account with console-logged TOTP seed."
+    }
+  },
+
+  "operational_lifecycle_workflows": {
+    "initial_deployment": [
+      "1. Transfer LinkPass-Linux-Server.zip to target Linux server via SCP/SFTP.",
+      "2. Extract bundle: unzip LinkPass-Linux-Server.zip -d LinkPass && cd LinkPass.",
+      "3. Generate customer `.lic` via KeyGen GUI tool and copy to LinkPass/server/license.jwt.",
+      "4. Update JWT secret in docker-compose.yml (or create .env file).",
+      "5. Spin up container: sudo docker compose up --build -d.",
+      "6. Retrieve initial superadmin TOTP seed from logs: sudo docker compose logs server.",
+      "7. Open port 443 on host firewall (ufw / firewalld).",
+      "8. Distribute LinkPass-Client.zip to workstations with updated config.json."
+    ],
+    "license_renewal": [
+      "1. Generate new `.lic` file via KeyGen tool with updated `exp` date.",
+      "2. Replace server/license.jwt on Linux host.",
+      "3. Restart backend service: sudo docker compose restart server."
+    ],
+    "backup_and_recovery": [
+      "Database snapshot: Copy linkpass.db or run pg_dump.",
+      "Offline decryption & verification: Use decrypt_backup.py CLI tool to extract and verify backup integrity."
+    ]
+  }
+}
