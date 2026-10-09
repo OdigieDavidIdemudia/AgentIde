@@ -3,15 +3,18 @@ import { useAgentContext } from '../../context/AgentContext.jsx';
 import { apiFetch } from '../../api.js';
 import { useNavigate } from 'react-router-dom';
 import styles from './FleetView.module.css';
+import { EmptyState, ConfirmModal } from '../../components/ui.jsx';
 
 export default function FleetView() {
   const { state, dispatch } = useAgentContext();
   const navigate = useNavigate();
 
-  const handleDelete = async (hostname) => {
-    if (!window.confirm(`Are you sure you want to delete the agent "${hostname}" and all its history?`)) {
-      return;
-    }
+  const [pendingDelete, setPendingDelete] = React.useState(null);
+
+  const handleDelete = async () => {
+    const hostname = pendingDelete;
+    setPendingDelete(null);
+    if (!hostname) return;
     try {
       const res = await apiFetch(`https://${window.location.host}/api/agents/${hostname}`, {
         method: 'DELETE'
@@ -39,14 +42,22 @@ export default function FleetView() {
         </div>
       </header>
 
+      {pendingDelete && (
+        <ConfirmModal
+          title="Delete agent?"
+          message={`Are you sure you want to delete the agent "${pendingDelete}" and all its history?`}
+          confirmLabel="Delete"
+          danger
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={handleDelete}
+        />
+      )}
       {state.agents.length === 0 ? (
-        <div className={styles.emptyState}>
-          <h3>No agents connected</h3>
-          <p>Install AgentIde on a virtual machine to get started.</p>
-          <div className={styles.installCommand}>
-            <code>.\agentide.exe --dashboard wss://192.168.x.x:8080 --mode passive</code>
-          </div>
-        </div>
+        <EmptyState
+          title="No agents connected"
+          message="Install AgentIde on a virtual machine to get started."
+          action={<div className={styles.installCommand}><code>.\agentide.exe --dashboard wss://192.168.x.x:8080 --mode passive</code></div>}
+        />
       ) : (
         <div className="card">
           <table className={styles.table}>
@@ -88,7 +99,7 @@ export default function FleetView() {
                     <button 
                       className="btn-danger"
                       style={{ padding: '0 var(--spacing-sm)' }}
-                      onClick={() => handleDelete(agent.hostname)}
+                      onClick={() => setPendingDelete(agent.hostname)}
                     >
                       ✕
                     </button>

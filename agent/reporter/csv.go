@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
+	"strings"
 )
 
 // WriteCSV generates a CSV file matching the column format of the original Excel assessment matrix.
@@ -25,6 +26,7 @@ func (r *Report) WriteCSV(path string) error {
 		"Actual Outcome",
 		"Detection Latency (ms)",
 		"Result",
+		"Files Created",
 		"Notes",
 	})
 
@@ -49,6 +51,7 @@ func (r *Report) WriteCSV(path string) error {
 			res.Detail,
 			fmt.Sprintf("%d", res.ElapsedMs),
 			result,
+			strings.Join(res.Artifacts, "; "),
 			res.Notes,
 		})
 	}

@@ -21,11 +21,11 @@ const (
 
 // AgentState is persisted to disk so we can detect restarts.
 type AgentState struct {
-	Hostname     string    `json:"hostname"`
-	StartedAt    time.Time `json:"started_at"`
+	Hostname      string    `json:"hostname"`
+	StartedAt     time.Time `json:"started_at"`
 	LastHeartbeat time.Time `json:"last_heartbeat"`
-	StartCount   int       `json:"start_count"`  // total number of times agent has started
-	KillCount    int       `json:"kill_count"`   // detected external kills
+	StartCount    int       `json:"start_count"` // total number of times agent has started
+	KillCount     int       `json:"kill_count"`  // detected external kills
 }
 
 // KillEvent describes a detected kill/recovery cycle.

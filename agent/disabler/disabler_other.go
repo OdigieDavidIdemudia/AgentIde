@@ -6,9 +6,9 @@ import "fmt"
 
 // DisableResult holds the outcome of a disable attempt.
 type DisableResult struct {
-	Vendor    string
-	Disabled  bool
-	Notes     string
+	Vendor   string
+	Disabled bool
+	Notes    string
 }
 
 // Disable is a no-op stub on non-Windows platforms.

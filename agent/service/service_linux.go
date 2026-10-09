@@ -14,7 +14,7 @@ const (
 )
 
 // Install writes a systemd unit file and enables the AgentIde service.
-func Install(dashboardURL string) error {
+func Install(dashboardURL, agentToken, certPin string, allowReboot bool) error {
 	exePath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("cannot determine executable path: %w", err)
@@ -27,6 +27,15 @@ func Install(dashboardURL string) error {
 	execArgs := "--mode passive"
 	if dashboardURL != "" {
 		execArgs += " --dashboard " + dashboardURL
+	}
+	if agentToken != "" {
+		execArgs += " --token " + agentToken
+	}
+	if certPin != "" {
+		execArgs += " --cert-pin " + certPin
+	}
+	if allowReboot {
+		execArgs += " --allow-reboot"
 	}
 
 	unit := fmt.Sprintf(`[Unit]

@@ -1,53 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useAgentContext } from "../../context/AgentContext.jsx";
 import { apiFetch } from "../../api.js";
 import styles from "./Reports.module.css";
-
-// ─── Static session findings from the Cortex XDR assessment ──────────────────
-// These are pre-seeded because they were observed manually before the
-// automated tamper_event / module_result pipeline was in place.
-const SESSION_FINDINGS = [
-  {
-    id: "FIND-001", agent_id: "TestVPC", category: "blackbox",
-    phase: "Installation", result: "BLOCKED",
-    title: "Cortex XDR silently killed unsigned installer process",
-    detail: "agentide.exe --install returned zero output. Process terminated before service registration.",
-    mitre: "T1562.001", timestamp: "2026-09-23T19:31:00+01:00",
-    edr_action: "PROCESS_KILL",
-  },
-  {
-    id: "FIND-002", agent_id: "TestVPC", category: "blackbox",
-    phase: "Persistence / Boot Survival", result: "BLOCKED",
-    title: "ELAM driver quarantined agent binary on system restart",
-    detail: "Unsigned binary quarantined and removed from disk during Windows boot phase. All 3 resilience layers negated.",
-    mitre: "T1547", timestamp: "2026-09-23T19:39:00+01:00",
-    edr_action: "QUARANTINE_FILE",
-  },
-  {
-    id: "FIND-003", agent_id: "TestVPC", category: "blackbox",
-    phase: "Certificate Trust", result: "BLOCKED",
-    title: "Cortex XDR blocked cert import into TrustedPublisher store",
-    detail: "Import-Certificate denied with E_ACCESSDENIED (0x80070005) even as NT AUTHORITY\\SYSTEM.",
-    mitre: "T1553.004", timestamp: "2026-09-23T20:18:00+01:00",
-    edr_action: "BLOCK_CERTIFICATE_STORE_WRITE",
-  },
-  {
-    id: "FIND-004", agent_id: "TestVPC", category: "whitebox",
-    phase: "Discovery", result: "PASS",
-    title: "AgentIde successfully discovered Cortex XDR (CyveraService)",
-    detail: "Vendor name, PID, and service name extracted and reported to dashboard in real time.",
-    mitre: "T1518.001", timestamp: "2026-09-23T14:00:00+01:00",
-    edr_action: "N/A",
-  },
-  {
-    id: "FIND-005", agent_id: "TestVPC", category: "internal",
-    phase: "Fingerprinting", result: "FIXED",
-    title: "OS version misreported: Windows 10 Pro instead of Windows 11 Pro",
-    detail: "ProductName registry key returns Windows 10 for Windows 11. Fixed by checking CurrentBuild >= 22000.",
-    mitre: "N/A", timestamp: "2026-09-23T13:00:00+01:00",
-    edr_action: "N/A",
-  },
-];
+import { Toast } from "../../components/ui.jsx";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -67,6 +22,7 @@ function typeBadge(category, styles) {
     whitebox: [styles.typeWhitebox, "WB"],
     blackbox: [styles.typeBlackbox, "BB"],
     internal: [styles.typeInternal, "INT"],
+    live: [styles.typeInternal, "LIVE"],
   };
   const [cls, label] = map[category] || [styles.typeInternal, category || "—"];
   return <span className={`${styles.typeBadge} ${cls}`}>{label}</span>;
@@ -96,10 +52,16 @@ export default function Reports() {
   const [activeAgent, setActiveAgent] = useState(null);
   const [remediations, setRemediations] = useState({});
   const [loadingRemediation, setLoadingRemediation] = useState({});
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [toast, setToast] = useState(null);
+  const showToast = (nextToast) => {
+    setToast(nextToast);
+    setTimeout(() => setToast(null), 5000);
+  };
 
-  // Collect unique agent IDs from live events + session findings
+  // Collect unique agent IDs from live events and agents
   const agentIds = useMemo(() => {
-    const ids = new Set(SESSION_FINDINGS.map(f => f.agent_id));
+    const ids = new Set();
     state.events.forEach(e => { if (e.agent_id) ids.add(e.agent_id); });
     state.agents.forEach(a => { if (a.hostname) ids.add(a.hostname); });
     return [...ids];
@@ -125,8 +87,27 @@ export default function Reports() {
     return matches[matches.length - 1] || null;
   }, [state.events, selected]);
 
-  // Session findings for selected agent
-  const sessionFindings = SESSION_FINDINGS.filter(f => f.agent_id === selected);
+  // Session findings for selected agent (from live events)
+  const sessionFindings = useMemo(() => {
+    // Get findings from module_result and other event types
+    const findings = state.events
+      .filter(e => e.agent_id === selected && 
+        (e.type === "module_result" || e.type === "assessment_done" || e.type === "preflight_result" || e.type === "pre_scan_result"))
+      .map(e => ({
+        id: e.payload?.module || e.type,
+        agent_id: selected,
+        category: e.payload?.test_type || "live",
+        phase: e.payload?.module ? "Assessment" : "System",
+        result: e.payload?.passed ? "PASS" : e.payload?.result === "BLOCKED_BY_EDR" ? "BLOCKED_BY_EDR" : "FAIL",
+        title: e.payload?.module || e.type,
+        detail: e.payload?.detail || JSON.stringify(e.payload),
+        mitre: e.payload?.mitre || "N/A",
+        artifacts: e.payload?.artifacts || [],
+        timestamp: e.timestamp,
+        edr_action: e.payload?.result,
+      }));
+    return findings;
+  }, [state.events, selected]);
 
   // Summary counts
   const totalModules = moduleResults.length;
@@ -134,7 +115,7 @@ export default function Reports() {
   const failedModules = totalModules - passedModules;
   const totalTampers = tamperEvents.length;
 
-  // MITRE Calculation
+  // MITRE Calculation - use module results and tamper events
   const mitreStats = useMemo(() => {
     const stats = {};
     const addStat = (mitreId, isPass) => {
@@ -145,13 +126,16 @@ export default function Reports() {
       if (isPass) stats[tactic].passed += 1;
     };
     
-    sessionFindings.forEach(f => addStat(f.mitre, f.result === "BLOCKED"));
+    // Use module results and tamper events for MITRE stats
     moduleResults.forEach(m => {
-        const isPassed = m.payload?.passed || m.payload?.result === 'BLOCKED_BY_EDR';
-        addStat(m.payload?.mitre, isPassed);
-      });
+      const isPassed = m.payload?.passed || m.payload?.result === 'BLOCKED_BY_EDR';
+      addStat(m.payload?.mitre, isPassed);
+    });
+    tamperEvents.forEach(e => {
+      addStat(e.payload?.mitre, true); // tamper events are BLOCKED_BY_EDR = pass
+    });
     return stats;
-  }, [sessionFindings, moduleResults]);
+  }, [moduleResults, tamperEvents]);
 
   if (agentIds.length === 0) {
     return (
@@ -165,19 +149,41 @@ export default function Reports() {
     );
   }
 
-  const [isGenerating, setIsGenerating] = useState(false);
+  const getReportPayload = () => {
+    // Collect all assessments for this agent to build scope
+    const allAssessments = state.events
+      .filter(e => e.agent_id === selected && e.type === 'assessment_done')
+      .map(e => e.payload);
+    
+    const testTypes = [...new Set(allAssessments.map(a => a.test_type).filter(Boolean))];
+    const profiles = [...new Set(allAssessments.map(a => a.profile).filter(Boolean))];
+    const modules = [...new Set(moduleResults.map(e => e.payload?.module).filter(Boolean))];
+    const vendors = [...new Set(state.events.filter(e => e.agent_id === selected && e.payload?.vendor).map(e => e.payload.vendor))];
+    const dateRange = allAssessments.length > 0 ? {
+      first: allAssessments[0]?.timestamp,
+      last: allAssessments[allAssessments.length - 1]?.timestamp
+    } : null;
 
-  const getReportPayload = () => ({
-    agent: selected,
-    exported_at: new Date().toISOString(),
-    summary: { totalModules, passedModules, failedModules, totalTampers },
-    deployment_integrity: [
-      ...sessionFindings.filter(f => f.result === 'BLOCKED'),
-      ...tamperEvents.map(e => ({ ...e.payload, timestamp: e.timestamp, result: 'AGENT_RECOVERED' }))
-    ],
-    module_results: moduleResults.map(e => ({ ...e.payload, timestamp: e.timestamp })),
-    session_findings: sessionFindings.filter(f => f.result !== 'BLOCKED'),
-  });
+    return {
+      agent: selected,
+      exported_at: new Date().toISOString(),
+      scope: {
+        test_types: testTypes.length > 0 ? testTypes : ['blackbox'],
+        profiles: profiles.length > 0 ? profiles : ['rapid'],
+        modules_tested: modules.length > 0 ? modules : ['malware','lolbin','network','identity','antitamper','reboot','falsepositive','performance'],
+        target_vendors: vendors.length > 0 ? vendors : ['Microsoft Defender'],
+        date_range: dateRange,
+        total_assessments: allAssessments.length
+      },
+      summary: { totalModules, passedModules, failedModules, totalTampers },
+      deployment_integrity: [
+        ...sessionFindings.filter(f => f.result === 'BLOCKED' || f.result === 'BLOCKED_BY_EDR'),
+        ...tamperEvents.map(e => ({ ...e.payload, timestamp: e.timestamp, result: 'AGENT_RECOVERED' }))
+      ],
+      module_results: moduleResults.map(e => ({ ...e.payload, timestamp: e.timestamp })),
+      session_findings: sessionFindings.filter(f => f.result !== 'BLOCKED' && f.result !== 'BLOCKED_BY_EDR'),
+    };
+  };
 
   const handleExport = () => {
     const report = getReportPayload();
@@ -188,6 +194,52 @@ export default function Reports() {
     a.download = `agentide-report-${selected}-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportMarkdown = async () => {
+    try {
+      const report = getReportPayload();
+      const response = await apiFetch('/api/generate-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...report, format: 'markdown' })
+      });
+      const data = await response.json();
+      if (data.error) throw new Error(data.error);
+      
+      const blob = new Blob([data.markdown], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `agentide-report-${selected}-${Date.now()}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      showToast({ tone: 'error', message: `Markdown export failed: ${err.message}` });
+    }
+  };
+
+  const handleExportDocx = async () => {
+    try {
+      const report = getReportPayload();
+      const response = await apiFetch('/api/generate-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...report, format: 'docx' })
+      });
+      const data = await response.json();
+      if (data.error) throw new Error(data.error);
+      
+      const blob = new Blob([data.docx], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `agentide-report-${selected}-${Date.now()}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      showToast({ tone: 'error', message: `Docx export failed: ${err.message}` });
+    }
   };
 
   const handleGenerateReport = async () => {
@@ -209,7 +261,7 @@ export default function Reports() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      alert(`Report generation failed: ${err.message}`);
+      showToast({ tone: 'error', message: `Report generation failed: ${err.message}` });
     } finally {
       setIsGenerating(false);
     }
@@ -227,7 +279,7 @@ export default function Reports() {
       if (data.error) throw new Error(data.error);
       setRemediations(prev => ({ ...prev, [findingId]: data.remediation }));
     } catch (err) {
-      alert("Failed to generate remediation: " + err.message);
+      showToast({ tone: 'error', message: `Failed to generate remediation: ${err.message}` });
     } finally {
       setLoadingRemediation(prev => ({ ...prev, [findingId]: false }));
     }
@@ -235,6 +287,7 @@ export default function Reports() {
 
   return (
     <div className={styles.container}>
+      <Toast message={toast?.message} tone={toast?.tone} />
       <header className={styles.header}>
         <div className={styles.headerLeft}>
           <h2>Reports</h2>
@@ -245,7 +298,19 @@ export default function Reports() {
             disabled={isGenerating}
             style={{ background: 'var(--accent)', border: 'none', color: '#fff', padding: '6px var(--spacing-md)', borderRadius: '4px', cursor: isGenerating ? 'wait' : 'pointer', fontSize: '0.82rem', fontFamily: 'inherit', fontWeight: 'bold' }}
           >
-            {isGenerating ? "Generating..." : "Generate Report"}
+            {isGenerating ? "Generating..." : "Generate HTML Report"}
+          </button>
+          <button
+            onClick={handleExportMarkdown}
+            style={{ background: 'var(--accent)', border: 'none', color: '#fff', padding: '6px var(--spacing-md)', borderRadius: '4px', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit', fontWeight: 'bold' }}
+          >
+            Export Markdown
+          </button>
+          <button
+            onClick={handleExportDocx}
+            style={{ background: 'var(--accent)', border: 'none', color: '#fff', padding: '6px var(--spacing-md)', borderRadius: '4px', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit', fontWeight: 'bold' }}
+          >
+            Export Docx
           </button>
           <button
             onClick={handleExport}
@@ -291,7 +356,7 @@ export default function Reports() {
       {Object.keys(mitreStats).length > 0 && (
         <div className={styles.section}>
           <div className={styles.sectionTitle}>MITRE ATT&CK Gap Analysis</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', padding: '16px', background: 'var(--n-900)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', padding: '16px', background: 'var(--surface)', borderRadius: '4px', border: '1px solid var(--border)' }}>
             {Object.entries(mitreStats).map(([tactic, stat]) => {
               const pct = Math.round((stat.passed / stat.total) * 100);
               return (
@@ -312,12 +377,12 @@ export default function Reports() {
       )}
 
       {/* Deployment Integrity — tamper events */}
-      {(tamperEvents.length > 0 || sessionFindings.filter(f => f.result === "BLOCKED").length > 0) && (
+      {(tamperEvents.length > 0 || sessionFindings.filter(f => f.result === "BLOCKED" || f.result === "BLOCKED_BY_EDR").length > 0) && (
         <div className={styles.section}>
           <div className={styles.sectionTitle}>Deployment Integrity (Blackbox)</div>
 
-          {/* Static session findings — BLOCKED */}
-          {sessionFindings.filter(f => f.result === "BLOCKED").map(f => (
+          {/* Live module results showing BLOCKED_BY_EDR */}
+          {sessionFindings.filter(f => f.result === "BLOCKED" || f.result === "BLOCKED_BY_EDR").map(f => (
             <div key={f.id} className={`${styles.findingRow} ${styles.tamperRow}`}>
               <div>{resultBadge(f.result, styles)}</div>
               <div style={{ flex: 1 }}>
@@ -366,6 +431,14 @@ export default function Reports() {
                     <div className={styles.findingTitle}>{e.payload?.module}</div>
                     <div className={styles.findingDetail}>{e.payload?.detail}</div>
                     {e.payload?.duration_ms && <div className={styles.mitre} style={{marginTop:2}}>Duration: {e.payload.duration_ms}ms</div>}
+                    {e.payload?.artifacts?.length > 0 && (
+                      <div className={styles.mitre} style={{ marginTop: 4 }}>
+                        Files created:
+                        {e.payload.artifacts.map((a, ai) => (
+                          <code key={ai} style={{ display: 'block', wordBreak: 'break-all', color: 'var(--text-secondary)' }}>{a}</code>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: 'flex-end' }}>
                     {typeBadge(e.payload?.test_type, styles)}
@@ -384,7 +457,7 @@ export default function Reports() {
                 
                 {/* AI Remediation Output */}
                 {remediations[fid] && (
-                  <div style={{ margin: '0 16px 16px 16px', padding: '16px', background: '#1e293b', borderLeft: '4px solid var(--accent)', borderRadius: '4px', color: '#f8fafc', fontSize: '0.85rem', whiteSpace: 'pre-wrap' }}>
+                  <div style={{ margin: '0 16px 16px 16px', padding: '16px', background: 'var(--surface)', borderLeft: '4px solid var(--accent)', borderRadius: '4px', color: 'var(--text-primary)', fontSize: '0.85rem', whiteSpace: 'pre-wrap' }}>
                     <div style={{ fontWeight: 'bold', marginBottom: '8px', color: 'var(--accent)' }}>AI-Generated Remediation Strategy</div>
                     {remediations[fid]}
                   </div>
@@ -398,7 +471,7 @@ export default function Reports() {
       {/* Discovery & other session findings */}
       <div className={styles.section}>
         <div className={styles.sectionTitle}>Session Findings</div>
-        {sessionFindings.filter(f => f.result !== "BLOCKED").map(f => {
+        {sessionFindings.filter(f => f.result !== "BLOCKED" && f.result !== "BLOCKED_BY_EDR").map(f => {
           const isGap = f.result === "PASS"; // e.g. discovery succeeded (EDR missed it)
           return (
             <div key={f.id} style={{ display: 'flex', flexDirection: 'column' }}>
@@ -408,6 +481,14 @@ export default function Reports() {
                   <div className={styles.findingTitle}>{f.title}</div>
                   <div className={styles.findingDetail}>{f.detail}</div>
                   {f.mitre !== "N/A" && <div className={styles.mitre} style={{marginTop:4}}>MITRE: {f.mitre}</div>}
+                  {f.artifacts?.length > 0 && (
+                    <div className={styles.mitre} style={{ marginTop: 4 }}>
+                      Files created:
+                      {f.artifacts.map((a, ai) => (
+                        <code key={ai} style={{ display: 'block', wordBreak: 'break-all', color: 'var(--text-secondary)' }}>{a}</code>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: 'flex-end' }}>
                   {typeBadge(f.category, styles)}
@@ -427,7 +508,7 @@ export default function Reports() {
               
               {/* AI Remediation Output */}
               {remediations[f.id] && (
-                <div style={{ margin: '0 16px 16px 16px', padding: '16px', background: '#1e293b', borderLeft: '4px solid var(--accent)', borderRadius: '4px', color: '#f8fafc', fontSize: '0.85rem', whiteSpace: 'pre-wrap' }}>
+                <div style={{ margin: '0 16px 16px 16px', padding: '16px', background: 'var(--surface)', borderLeft: '4px solid var(--accent)', borderRadius: '4px', color: 'var(--text-primary)', fontSize: '0.85rem', whiteSpace: 'pre-wrap' }}>
                   <div style={{ fontWeight: 'bold', marginBottom: '8px', color: 'var(--accent)' }}>AI-Generated Remediation Strategy</div>
                   {remediations[f.id]}
                 </div>
@@ -436,7 +517,7 @@ export default function Reports() {
           );
         })}
 
-        {sessionFindings.filter(f => f.result !== "BLOCKED").length === 0 && moduleResults.length === 0 && (
+        {sessionFindings.filter(f => f.result !== "BLOCKED" && f.result !== "BLOCKED_BY_EDR").length === 0 && moduleResults.length === 0 && (
           <div style={{ padding: "var(--spacing-lg)", color: "var(--n-500)", textAlign: "center", fontSize: "0.83rem" }}>
             No findings yet for {selected}. Launch an assessment to populate this view.
           </div>

@@ -3,7 +3,11 @@
 package main
 
 import (
+	"fmt"
+
 	"agentide/core"
+	"agentide/guard"
+	"agentide/service"
 
 	"golang.org/x/sys/windows/svc"
 )
@@ -28,6 +32,12 @@ func (s *agentSvc) Execute(args []string, r <-chan svc.ChangeRequest, changes ch
 	// 2. Run all startup logic (fingerprint, discovery, transport) in the background
 	stopCh := make(chan struct{})
 	go func() {
+		// Re-apply the anti-tamper DACL on every startup so protection
+		// survives a self-update (which temporarily widens the descriptor).
+		// Done here, after SERVICE_RUNNING, so it cannot delay the SCM.
+		if err := service.Harden(); err != nil {
+			fmt.Printf("[WARN] Could not apply service protection: %v\n", err)
+		}
 		runAgent(s.cfg, s.mode, s.profile, s.days, s.module)
 		close(stopCh)
 	}()
@@ -54,11 +64,62 @@ func (s *agentSvc) Execute(args []string, r <-chan svc.ChangeRequest, changes ch
 
 // runAsWindowsService hands control to the Windows SCM dispatcher.
 func runAsWindowsService(cfg *core.Config, mode, profile string, days int, module string) error {
-	return svc.Run("AgentIde", &agentSvc{
+	return svc.Run(service.ServiceName, &agentSvc{
 		cfg:     cfg,
 		mode:    mode,
 		profile: profile,
 		days:    days,
 		module:  module,
 	})
+}
+
+// guardSvc implements the self-protection guardian service.
+type guardSvc struct{}
+
+// Execute runs the guardian loop and stops cleanly on SCM stop/shutdown.
+func (s *guardSvc) Execute(args []string, r <-chan svc.ChangeRequest, changes chan<- svc.Status) (bool, uint32) {
+	const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown
+
+	stopCh := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		guard.Run(stopCh)
+		close(done)
+	}()
+
+	changes <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
+
+	for {
+		select {
+		case req := <-r:
+			switch req.Cmd {
+			case svc.Stop, svc.Shutdown:
+				changes <- svc.Status{State: svc.StopPending}
+				close(stopCh)
+				<-done
+				return false, 0
+			}
+		case <-done:
+			changes <- svc.Status{State: svc.StopPending}
+			return false, 0
+		}
+	}
+}
+
+// runGuardService hands control to the SCM dispatcher under the guardian
+// service name.
+func runGuardService() error {
+	return svc.Run(service.GuardServiceName, &guardSvc{})
+}
+
+// unprotectService widens the main service DACL for the duration of a
+// self-update. Called by the detached updater via the -unprotect flag.
+func unprotectService() error {
+	return service.Unprotect()
+}
+
+// repairInstall ensures both AgentIde services exist, are enabled and running.
+// Used by the scheduled task via the -repair flag.
+func repairInstall() error {
+	return service.Repair()
 }

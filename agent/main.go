@@ -18,27 +18,55 @@ import (
 	"agentide/watchdog"
 )
 
-const version = "0.1.0"
+// version is a variable (not a const) so release builds can override it with
+// `-ldflags "-X main.version=0.4.0"` to match the MSI package version.
+var version = "0.4.0"
 
 func main() {
 	// ── CLI Flags ──────────────────────────────────────────────────────────────
-	installFlag   := flag.Bool("install", false, "Install AgentIde as a system service")
+	installFlag := flag.Bool("install", false, "Install AgentIde as a system service")
 	uninstallFlag := flag.Bool("uninstall", false, "Uninstall the AgentIde system service")
-	modeFlag      := flag.String("mode", "passive", "Operating mode: passive | active")
-	profileFlag   := flag.String("profile", "rapid", "Assessment profile: rapid | apt | baseline")
-	daysFlag      := flag.Int("days", 1, "Duration in days (used with --profile apt or baseline)")
-	moduleFlag    := flag.String("module", "all", "Run a specific module: all | antitamper | malware | lolbin | network | identity | reboot | performance | falsepositive")
-	dashboardFlag := flag.String("dashboard", "", "Central dashboard WebSocket URL (e.g. wss://192.168.1.10:8080)")
-	tokenFlag    := flag.String("token", "", "Agent auth token (must match AGENT_TOKEN on the dashboard)")
-	certPinFlag  := flag.String("cert-pin", "", "Optional: hex SHA-256 of dashboard cert SPKI to pin instead of trusting any cert")
+	modeFlag := flag.String("mode", "passive", "Operating mode: passive | active")
+	profileFlag := flag.String("profile", "rapid", "Assessment profile: rapid | apt | baseline")
+	daysFlag := flag.Int("days", 1, "Duration in days (used with --profile apt or baseline)")
+	moduleFlag := flag.String("module", "all", "Run a specific module: all | antitamper | malware | lolbin | network | identity | reboot | performance | falsepositive")
+	dashboardFlag := flag.String("dashboard", "", "Dashboard WebSocket URL, or a comma-separated list to try in order (e.g. wss://192.168.1.168:8443,wss://10.0.0.1:8443)")
+	tokenFlag := flag.String("token", "", "Agent auth token (must match AGENT_TOKEN on the dashboard)")
+	certPinFlag := flag.String("cert-pin", "", "Optional: hex SHA-256 of dashboard cert SPKI to pin instead of trusting any cert")
 	watchdogFlag := flag.String("watchdog", "", "Internal: watchdog child mode (vendor,marker,heartbeatSec,deadlineUnix)")
-	allowReboot   := flag.Bool("allow-reboot", false, "Allow AgentIde to reboot the system during Boot Gap testing")
-	versionFlag   := flag.Bool("version", false, "Print version and exit")
+	guardFlag := flag.Bool("guard", false, "Internal: run the self-protection guardian service")
+	unprotectFlag := flag.Bool("unprotect", false, "Internal: temporarily widen the service DACL for a self-update")
+	repairFlag := flag.Bool("repair", false, "Internal: ensure the services exist and are running (used by the scheduled task)")
+	allowReboot := flag.Bool("allow-reboot", false, "Allow AgentIde to reboot the system during Boot Gap testing")
+	checkFlag := flag.Bool("check", false, "Test connectivity to -dashboard and exit (0 = reachable, 1 = unreachable)")
+	versionFlag := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
 
 	if *versionFlag {
 		fmt.Printf("AgentIde v%s\n", version)
 		os.Exit(0)
+	}
+
+	// ── Connectivity Check Mode ────────────────────────────────────────────────
+	// Used by the installer and for manual troubleshooting: connect to the
+	// dashboard, confirm it accepts our token, then exit with a clear status.
+	if *checkFlag {
+		if *dashboardFlag == "" {
+			fmt.Println("[ERROR] -check requires -dashboard <url>")
+			os.Exit(2)
+		}
+		logger, _ := core.NewLogger("agentide.log")
+		hostname, _ := os.Hostname()
+		sender := transport.NewSender(*dashboardFlag, hostname, *tokenFlag, *certPinFlag, logger)
+		sender.Connect()
+		if transport.WaitForConnection(sender, 10*time.Second) {
+			fmt.Printf("[OK] Dashboard reachable and token accepted: %s\n", *dashboardFlag)
+			sender.Disconnect()
+			os.Exit(0)
+		}
+		fmt.Printf("[ERROR] Dashboard NOT reachable with the given URL/token: %s\n", *dashboardFlag)
+		sender.Disconnect()
+		os.Exit(1)
 	}
 
 	// ── Watchdog Child Mode ────────────────────────────────────────────
@@ -54,25 +82,70 @@ func main() {
 		os.Exit(0)
 	}
 
+	// ── Guardian Service Mode ──────────────────────────────────────────────
+	// The self-protection guardian is a second service that keeps the main
+	// AgentIde service installed and running. It is started by the SCM, not
+	// by the user.
+	if *guardFlag {
+		if err := runGuardService(); err != nil {
+			log.Fatalf("[FATAL] Guardian service error: %v", err)
+		}
+		return
+	}
+
+	// ── Update Unprotect Mode ──────────────────────────────────────────────
+	// Internal: the detached updater runs the current binary with -unprotect
+	// to widen the service DACL just long enough to stop and replace the
+	// service. The next startup re-applies the hardened DACL.
+	if *unprotectFlag {
+		if err := unprotectService(); err != nil {
+			log.Fatalf("[FATAL] Could not unprotect service for update: %v", err)
+		}
+		fmt.Println("[OK] Service DACL widened for update.")
+		return
+	}
+
+	// ── Service Repair Mode ────────────────────────────────────────────────
+	// Internal: the scheduled task runs this once per minute to make sure the
+	// services exist, are enabled, and are running.
+	if *repairFlag {
+		if err := repairInstall(); err != nil {
+			log.Printf("[WARN] Service repair failed: %v", err)
+		}
+		return
+	}
+
 	// ── Service Management ─────────────────────────────────────────────────────
 	if *installFlag {
 		fmt.Println("[*] Attempting to install AgentIde service (Deployment Trust Phase)...")
 
-		if err := service.Install(*dashboardFlag); err != nil {
+		if err := service.Install(*dashboardFlag, *tokenFlag, *certPinFlag, *allowReboot); err != nil {
 			log.Fatalf("[FATAL] Service installation failed: %v", err)
 		}
 
 		// Persist the dashboard URL and token to config.json next to the exe so the service
 		// can read them at every reboot without needing CLI flags.
+		// Start from any existing config so a reinstall/repair/MSI upgrade
+		// without flags doesn't wipe the previously saved values.
 		exePath, _ := os.Executable()
 		exeDir := filepath.Dir(exePath)
 		configPath := filepath.Join(exeDir, "config.json")
-		persistCfg := &core.Config{
-			DashboardURL: *dashboardFlag,
-			AgentToken:   *tokenFlag,
-			CertPin:      *certPinFlag,
-			LogPath:      `C:\ProgramData\AgentIde\agentide.log`,
-			AllowReboot:  *allowReboot,
+		persistCfg, cfgErr := core.LoadConfig(configPath)
+		if cfgErr != nil {
+			persistCfg = core.DefaultConfig()
+		}
+		if *dashboardFlag != "" {
+			persistCfg.DashboardURL = *dashboardFlag
+		}
+		if *tokenFlag != "" {
+			persistCfg.AgentToken = *tokenFlag
+		}
+		if *certPinFlag != "" {
+			persistCfg.CertPin = *certPinFlag
+		}
+		persistCfg.LogPath = `C:\ProgramData\AgentIde\agentide.log`
+		if *allowReboot {
+			persistCfg.AllowReboot = true
 		}
 		if err := core.SaveConfig(configPath, persistCfg); err != nil {
 			fmt.Printf("[WARN] Could not write config.json: %v\n", err)
@@ -81,23 +154,32 @@ func main() {
 		}
 
 		// If we reached here, the EDR did not block the installation.
-		// Connect briefly to report the installation success to the dashboard.
+		// Connect, wait for the socket to come up, report the install result,
+		// then give it a moment to flush before disconnecting. This turns a
+		// silent misconfiguration (wrong URL/token) into a visible message.
 		if *dashboardFlag != "" {
 			logger, _ := core.NewLogger("agentide.log") // Temporary logger
 			hostname, _ := os.Hostname()
 			sender := transport.NewSender(*dashboardFlag, hostname, *tokenFlag, *certPinFlag, logger)
 			sender.Connect()
-			
-			// Send install survival result
-			sender.SendModuleResult(map[string]interface{}{
-				"module":      "install_survival",
-				"passed":      true,
-				"result":      "PASS",
-				"detail":      "Service installed successfully. System restart required to test ELAM boot survival.",
-				"test_type":   "blackbox",
-				"duration_ms": 0,
-				"mitre":       "T1543.003",
-			})
+
+			if transport.WaitForConnection(sender, 10*time.Second) {
+				// Send install survival result
+				sender.SendModuleResult(map[string]interface{}{
+					"module":      "install_survival",
+					"passed":      true,
+					"result":      "PASS",
+					"detail":      "Service installed successfully. System restart required to test ELAM boot survival.",
+					"test_type":   "blackbox",
+					"duration_ms": 0,
+					"mitre":       "T1543.003",
+				})
+				time.Sleep(750 * time.Millisecond) // let the message flush
+				fmt.Printf("[OK] Agent connected to dashboard and is reporting: %s\n", *dashboardFlag)
+			} else {
+				fmt.Printf("[WARN] Agent installed but could NOT reach the dashboard at: %s\n", *dashboardFlag)
+				fmt.Println("       Check the URL/token, then verify with: agentide.exe -check -dashboard <url> -token <token>")
+			}
 			sender.Disconnect()
 		}
 
@@ -124,7 +206,22 @@ func main() {
 	if *dashboardFlag != "" {
 		cfg.DashboardURL = *dashboardFlag
 	}
-	cfg.AllowReboot = *allowReboot
+	// Command-line values are authoritative when present. A Windows service is
+	// registered with `--dashboard/--token/--cert-pin` (see service.Install), so
+	// applying these here guarantees the agent authenticates even when
+	// config.json is missing or was not written next to the executable.
+	// Previously only -dashboard was applied, so such agents connected with an
+	// empty token and were rejected by the dashboard ("received=MISSING").
+	if *tokenFlag != "" {
+		cfg.AgentToken = *tokenFlag
+	}
+	if *certPinFlag != "" {
+		cfg.CertPin = *certPinFlag
+	}
+	// Only ever enable reboots; never clear a value persisted in config.json.
+	if *allowReboot {
+		cfg.AllowReboot = true
+	}
 
 	// ── Windows Service vs Interactive CLI Detection ───────────────────────────
 	// If the process was launched by the Windows Service Control Manager (not a user
@@ -195,7 +292,7 @@ func main() {
 	sender.Connect()
 	defer sender.Disconnect()
 
-	sender.SendFingerprint(fp.ToMap())
+	sender.SendFingerprint(fingerprintPayload(fp, cfg))
 	sender.StartHeartbeat()
 	if len(agents) > 0 {
 		sender.SendDiscovery(map[string]interface{}{"discovered_vendor": agents[0].Vendor})
@@ -204,4 +301,3 @@ func main() {
 	// Run
 	runAgent(cfg, *modeFlag, *profileFlag, *daysFlag, *moduleFlag)
 }
-

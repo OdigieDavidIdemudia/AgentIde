@@ -8,11 +8,11 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': {
-        target: 'https://localhost:8080',
+        target: 'https://localhost:8443',
         secure: false, // Allow self-signed certs in dev
       },
       '/dashboard': {
-        target: 'wss://localhost:8080',
+        target: 'wss://localhost:8443',
         ws: true,
         secure: false,
       },

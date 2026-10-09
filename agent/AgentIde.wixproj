@@ -1,0 +1,11 @@
+<Project Sdk="WixToolset.Sdk/6.0.0">
+
+  <PropertyGroup>
+    <!-- Build a 64-bit package (ProgramFiles64Folder, x64 components). -->
+    <InstallerPlatform>x64</InstallerPlatform>
+    <!-- MSI is emitted as msi_output\AgentIDE_0.4.0.msi -->
+    <OutputName>AgentIDE_0.4.0</OutputName>
+    <OutputPath>msi_output\</OutputPath>
+  </PropertyGroup>
+
+</Project>

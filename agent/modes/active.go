@@ -144,14 +144,14 @@ func (r *ActiveRunner) Run() error {
 				killedOnModule := mod.Name()
 				mitreID := getMitreID(killedOnModule, allModules)
 				edrKillRecord := state.ModuleRecord{
-					Name:      killedOnModule,
-					Passed:    true, // EDR PASSED — it killed the process
-					Result:    "BLOCKED_BY_EDR",
-					Detail:    fmt.Sprintf("EDR terminated the agent process during this module — technique was successfully blocked (kill #%d)", assessState.EDRKillCount),
-					MitreID:   mitreID,
+					Name:       killedOnModule,
+					Passed:     true, // EDR PASSED — it killed the process
+					Result:     "BLOCKED_BY_EDR",
+					Detail:     fmt.Sprintf("EDR terminated the agent process during this module — technique was successfully blocked (kill #%d)", assessState.EDRKillCount),
+					MitreID:    mitreID,
 					DurationMs: 0,
-					TestType:  r.testType,
-					Timestamp: time.Now().Format(time.RFC3339),
+					TestType:   r.testType,
+					Timestamp:  time.Now().Format(time.RFC3339),
 				}
 				_ = assessState.MarkCompleted(edrKillRecord)
 
@@ -193,6 +193,7 @@ func (r *ActiveRunner) Run() error {
 			Passed:     rec.Passed,
 			Detail:     rec.Detail,
 			ElapsedMs:  rec.DurationMs,
+			Artifacts:  rec.Artifacts,
 		})
 	}
 
@@ -213,11 +214,11 @@ func (r *ActiveRunner) Run() error {
 		r.logger.Info("Module starting", map[string]interface{}{"module": mod.Name()})
 
 		r.sender.Send(transport.EventModuleStart, map[string]interface{}{
-			"module":      mod.Name(),
-			"test_type":   r.testType,
-			"index":       i + 1,
-			"total":       len(selectedModules),
-			"session_id":  assessState.SessionID,
+			"module":     mod.Name(),
+			"test_type":  r.testType,
+			"index":      i + 1,
+			"total":      len(selectedModules),
+			"session_id": assessState.SessionID,
 		})
 
 		rawResult, recovered := r.runModuleSafely(mod)
@@ -256,6 +257,7 @@ func (r *ActiveRunner) Run() error {
 			DurationMs: rawResult.ElapsedMs,
 			TestType:   r.testType,
 			Timestamp:  time.Now().Format(time.RFC3339),
+			Artifacts:  verified.Artifacts,
 		}
 		_ = assessState.MarkCompleted(rec)
 
@@ -269,6 +271,7 @@ func (r *ActiveRunner) Run() error {
 			"mitre":       rawResult.MitreID,
 			"timestamp":   rec.Timestamp,
 			"session_id":  assessState.SessionID,
+			"artifacts":   verified.Artifacts,
 		})
 	}
 

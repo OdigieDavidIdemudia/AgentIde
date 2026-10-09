@@ -27,6 +27,7 @@ func (m *falsePositiveModule) Run() RawResult {
 	tmpDir := filepath.Join(os.TempDir(), fmt.Sprintf("agentide_fp_%d", time.Now().UnixNano()))
 	_ = os.MkdirAll(tmpDir, 0755)
 	globalLedger.Record("file", tmpDir, nil)
+	result.Artifacts = append(result.Artifacts, tmpDir)
 
 	// Write 50 dummy log files
 	for i := 0; i < 50; i++ {
@@ -42,6 +43,7 @@ func (m *falsePositiveModule) Run() RawResult {
 	} else {
 		notes = append(notes, "Directory compressed to zip")
 		globalLedger.Record("file", zipPath, nil)
+		result.Artifacts = append(result.Artifacts, zipPath)
 	}
 
 	// ── 2. Local port scan (scan own localhost ports) ─────────────────────

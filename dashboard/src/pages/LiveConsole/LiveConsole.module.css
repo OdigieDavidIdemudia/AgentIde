@@ -2,6 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
   gap: var(--spacing-lg);
 }
 
@@ -44,9 +45,13 @@
   padding: var(--spacing-md);
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.78rem;
+  /* Single scroll region: fill the flex parent and scroll internally.
+     (The old fixed max-height + 100% parent produced a nested double
+     scrollbar that made the console jump.) */
   overflow-y: auto;
+  overscroll-behavior: contain;
   flex: 1;
-  max-height: calc(100vh - 180px);
+  min-height: 0;
 }
 
 .eventRow {

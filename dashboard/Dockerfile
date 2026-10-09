@@ -11,7 +11,7 @@ COPY . .
 # Build the React UI
 RUN npm run build
 
-EXPOSE 8080
+EXPOSE 8443
 
 # Generate dev TLS certs, migrate the DB, then start the server.
 # PGHOST etc. come from the environment (docker-compose env_file).

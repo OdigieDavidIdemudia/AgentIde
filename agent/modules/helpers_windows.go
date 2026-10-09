@@ -48,17 +48,17 @@ func findBinary(processName string) string {
 
 // simulatePasswordSpray calls LogonUser N times with wrong credentials via syscall.
 func simulatePasswordSpray(attempts int) (blocked bool, note string) {
-	const domain   = "."
+	const domain = "."
 	const username = "agentide_test_user_nonexistent"
 	const password = "WrongPassword123!"
 
 	logonUser := syscall.MustLoadDLL("advapi32.dll").MustFindProc("LogonUserW")
 
-	userPtr, _   := syscall.UTF16PtrFromString(username)
+	userPtr, _ := syscall.UTF16PtrFromString(username)
 	domainPtr, _ := syscall.UTF16PtrFromString(domain)
-	passPtr, _   := syscall.UTF16PtrFromString(password)
+	passPtr, _ := syscall.UTF16PtrFromString(password)
 
-	const logon32LogonNetwork   = 3
+	const logon32LogonNetwork = 3
 	const logon32ProviderDefault = 0
 
 	for i := 0; i < attempts; i++ {

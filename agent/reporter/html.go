@@ -39,8 +39,9 @@ func (r *Report) buildHTML() string {
 			<td>%s</td>
 			<td>%s</td>
 			<td class="latency">%s</td>
+			<td>%s</td>
 			<td><span class="badge %s">%s</span></td>
-		</tr>`, res.ModuleName, esc(res.Action), esc(res.Detail), formatLatency(res.ElapsedMs), statusClass, statusLabel)
+		</tr>`, res.ModuleName, esc(res.Action), esc(res.Detail), formatLatency(res.ElapsedMs), formatArtifacts(res.Artifacts), statusClass, statusLabel)
 	}
 
 	return fmt.Sprintf(`<!DOCTYPE html>
@@ -251,6 +252,7 @@ func (r *Report) buildHTML() string {
         <th>Test Action</th>
         <th>Outcome</th>
         <th>Latency</th>
+        <th>Files Created</th>
         <th>Result</th>
       </tr>
     </thead>
@@ -259,7 +261,7 @@ func (r *Report) buildHTML() string {
 </div>
 
 <div class="footer">
-  <span>AgentIde v0.1.0 &mdash; Vendor-agnostic EDR/XDR POC Assessment Framework</span>
+  <span>AgentIde v0.3.0 &mdash; Vendor-agnostic EDR/XDR POC Assessment Framework</span>
   <span>%s</span>
 </div>
 
@@ -297,4 +299,16 @@ func formatLatency(ms int64) string {
 	min := int(sec) / 60
 	remSec := int(sec) % 60
 	return fmt.Sprintf("%dm %ds", min, remSec)
+}
+
+// formatArtifacts renders the list of files a module created, one per line.
+func formatArtifacts(paths []string) string {
+	if len(paths) == 0 {
+		return "<span style=\"color:var(--text-ter)\">&mdash;</span>"
+	}
+	parts := make([]string, 0, len(paths))
+	for _, p := range paths {
+		parts = append(parts, "<code>"+esc(p)+"</code>")
+	}
+	return strings.Join(parts, "<br>")
 }

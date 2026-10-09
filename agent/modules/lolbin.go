@@ -43,6 +43,7 @@ func (m *lolbinModule) Run() RawResult {
 		anyBlocked = true
 	}
 	globalLedger.Record("file", outFile, nil)
+	result.Artifacts = append(result.Artifacts, outFile)
 
 	// ── 3. mshta with a benign inline script ──────────────────────────────
 	m.logger.Info("LOLBin: mshta execution", nil)

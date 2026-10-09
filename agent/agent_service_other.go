@@ -10,3 +10,19 @@ func runAsWindowsService(cfg *core.Config, mode, profile string, days int, modul
 	runAgent(cfg, mode, profile, days, module)
 	return nil
 }
+
+// runGuardService is a no-op on non-Windows platforms, where the guardian
+// service does not exist.
+func runGuardService() error {
+	return nil
+}
+
+// unprotectService is a no-op on non-Windows platforms.
+func unprotectService() error {
+	return nil
+}
+
+// repairInstall is a no-op on non-Windows platforms.
+func repairInstall() error {
+	return nil
+}

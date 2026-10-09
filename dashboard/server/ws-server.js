@@ -1,7 +1,8 @@
 import { WebSocketServer } from 'ws';
 import { registry } from './agent-registry.js';
 import { pool } from './db.js';
-import { isAgentTokenValid, isValidSessionToken, issueAgentToken } from './auth.js';
+import { isAgentTokenValid, isValidSessionToken, issueAgentToken, tokenFingerprint } from './auth.js';
+import { buildUpdateCommand } from './agent-update.js';
 
 const allowedOrigins = (process.env.CORS_ORIGINS || '')
   .split(',')
@@ -12,14 +13,20 @@ export function setupWebSockets(server) {
   const wssAgents = new WebSocketServer({ noServer: true });
   const wssDashboard = new WebSocketServer({ noServer: true });
 
-  server.on('upgrade', (request, socket, head) => {
+  server.on('upgrade', async (request, socket, head) => {
     const url = new URL(request.url, `https://${request.headers.host || 'localhost'}`);
     const token = url.searchParams.get('token') || '';
 
     if (url.pathname === '/agent') {
-      // Agents authenticate with the shared AGENT_TOKEN secret.
-      // Connections are rejected when the token is missing/invalid.
-      if (!isAgentTokenValid(token)) {
+      // Agents may present the shared AGENT_TOKEN (bootstrap) or the
+      // per-agent token the dashboard issued them on first connect. Both must
+      // be accepted here, otherwise a registered agent can never reconnect.
+      if (!(await isAgentTokenAccepted(token))) {
+        console.warn(
+          `🛡️  Agent connection REJECTED (missing/invalid token) from ${request.socket.remoteAddress} — ` +
+          `received=${tokenFingerprint(token)} expected=${tokenFingerprint(process.env.AGENT_TOKEN)}. ` +
+          `Verify the agent's -token (per-agent tokens must exist in the agents table).`,
+        );
         socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
         socket.destroy();
         return;
@@ -30,6 +37,9 @@ export function setupWebSockets(server) {
     } else if (url.pathname === '/dashboard') {
       // Browsers authenticate with a session token from /api/auth/login.
       if (!isValidSessionToken(token)) {
+        console.warn(
+          `💻 Dashboard socket rejected (invalid/expired session) from ${request.socket.remoteAddress}`,
+        );
         socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
         socket.destroy();
         return;
@@ -54,10 +64,17 @@ export function setupWebSockets(server) {
     registry.addBrowser(ws);
     console.log('💻 Browser dashboard connected');
 
-    ws.on('close', () => {
+    ws.on('close', (code, reason) => {
       registry.removeBrowser(ws);
-      console.log('💻 Browser dashboard disconnected');
+      console.log('💻 Browser dashboard disconnected:', code, reason?.toString());
     });
+
+    ws.on('error', (err) => {
+      console.error('💻 Browser dashboard error:', err.message);
+    });
+
+    // Send a welcome message to verify connection is working
+    ws.send(JSON.stringify({ type: 'welcome', message: 'Connected to AgentIde Dashboard' }));
 
     ws.on('message', async (data) => {
       try {
@@ -79,7 +96,7 @@ export function setupWebSockets(server) {
 
   // --- Agent Connections ---
   wssAgents.on('connection', (ws, request) => {
-    console.log('🛡️  Agent connected');
+    console.log(`🛡️  Agent connected from ${request.socket.remoteAddress}`);
 
     // The token the agent presented at upgrade time (shared bootstrap
     // token or a per-agent token). Captured here so the fingerprint
@@ -102,8 +119,23 @@ export function setupWebSockets(server) {
           }
           registry.addAgent(ws, msg.agent_id);
           await handleFingerprint(msg, auth.agentToken);
+          console.log(`🛡️  Agent registered & fingerprinted: ${msg.agent_id}`);
           if (auth.agentToken) {
             ws.send(JSON.stringify({ type: 'agent_token', token: auth.agentToken }));
+          }
+
+          // Offer a self-update when the dashboard has a newer build.
+          const agentVersion = (msg.payload && msg.payload.version) || '';
+          const update = buildUpdateCommand(request.headers.host, agentVersion);
+          if (update) {
+            ws.send(JSON.stringify(update));
+            console.log(`⬆️  Offered agent update v${update.version} to ${msg.agent_id} (currently v${agentVersion || 'unknown'})`);
+            registry.broadcastToBrowsers({
+              type: 'agent_update_offered',
+              agent_id: msg.agent_id,
+              version: update.version,
+              from_version: agentVersion,
+            });
           }
         }
 
@@ -131,19 +163,39 @@ export function setupWebSockets(server) {
 async function handleFingerprint(msg, agentToken) {
   const p = msg.payload;
   const res = await pool.query(`
-    INSERT INTO agents (hostname, ip, mac, os, os_version, kernel_build, arch, status, mode, last_seen, token)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, 'online', 'passive', NOW(), $8)
+    INSERT INTO agents (hostname, ip, mac, os, os_version, kernel_build, arch, status, mode, last_seen, token, dashboard_url, log_path, allow_reboot)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, 'online', 'passive', NOW(), $8, $9, $10, $11)
     ON CONFLICT (hostname, mac) DO UPDATE SET
       ip = EXCLUDED.ip,
       os = EXCLUDED.os,
       os_version = EXCLUDED.os_version,
       status = 'online',
-      last_seen = NOW()
+      last_seen = NOW(),
+      dashboard_url = COALESCE(EXCLUDED.dashboard_url, agents.dashboard_url),
+      log_path = COALESCE(EXCLUDED.log_path, agents.log_path),
+      allow_reboot = COALESCE(EXCLUDED.allow_reboot, agents.allow_reboot)
     RETURNING id
-  `, [msg.agent_id, p.ip, p.mac, p.os, p.os_version, p.kernel_build, p.arch, agentToken || null]);
+  `, [
+    msg.agent_id, p.ip, p.mac, p.os, p.os_version, p.kernel_build, p.arch,
+    agentToken || null, p.dashboard_url || null, p.log_path || null, p.allow_reboot ?? null,
+  ]);
   
   if (res.rows.length > 0) {
     registry.setAgentDbId(msg.agent_id, res.rows[0].id);
+  }
+}
+
+// Accept either the shared bootstrap token or a per-agent token already bound
+// to a hostname in the agents table. Called at WebSocket upgrade time.
+async function isAgentTokenAccepted(token) {
+  if (isAgentTokenValid(token)) return true;
+  if (!token) return false;
+  try {
+    const res = await pool.query('SELECT 1 FROM agents WHERE token = $1 LIMIT 1', [token]);
+    return res.rowCount > 0;
+  } catch (err) {
+    console.error('Agent token lookup failed:', err.message);
+    return false;
   }
 }
 
@@ -187,7 +239,7 @@ async function recordModuleResult(msg) {
     !!p.passed,
     p.detail || '',
     p.duration_ms || 0,
-    JSON.stringify({ mitre: p.mitre, test_type: p.test_type, timestamp: p.timestamp }),
+    JSON.stringify({ mitre: p.mitre, test_type: p.test_type, timestamp: p.timestamp, artifacts: p.artifacts || [] }),
   ]);
 }
 

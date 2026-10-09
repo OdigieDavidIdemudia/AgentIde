@@ -1,0 +1,30 @@
+#include <windows.h>
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION 0,2,0,0
+PRODUCTVERSION 0,2,0,0
+FILEFLAGSMASK VS_FFI_FILEFLAGS
+FILEFLAGS 0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName", "AgentIDE Project\0"
+            VALUE "FileDescription", "AgentIDE EDR/XDR Assessment Agent\0"
+            VALUE "FileVersion", "0.2.0\0"
+            VALUE "InternalName", "agentide\0"
+            VALUE "LegalCopyright", "Copyright (C) 2024 AgentIDE Project\0"
+            VALUE "OriginalFilename", "agentide.exe\0"
+            VALUE "ProductName", "AgentIDE\0"
+            VALUE "ProductVersion", "0.2.0\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 0x04b0
+    END
+END

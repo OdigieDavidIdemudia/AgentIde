@@ -16,10 +16,10 @@ type performanceModule struct {
 }
 
 type perfSample struct {
-	Timestamp   time.Time
-	CPUPercent  float64
-	MemUsedMB   float64
-	MemPercent  float64
+	Timestamp  time.Time
+	CPUPercent float64
+	MemUsedMB  float64
+	MemPercent float64
 }
 
 func (m *performanceModule) Name() string { return "performance" }
@@ -41,9 +41,9 @@ func (m *performanceModule) Run() RawResult {
 		} else {
 			m.samples = append(m.samples, sample)
 			m.logger.Debug("Performance sample", map[string]interface{}{
-				"cpu_pct":   sample.CPUPercent,
-				"mem_mb":    sample.MemUsedMB,
-				"mem_pct":   sample.MemPercent,
+				"cpu_pct": sample.CPUPercent,
+				"mem_mb":  sample.MemUsedMB,
+				"mem_pct": sample.MemPercent,
 			})
 		}
 		if i < 5 {

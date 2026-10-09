@@ -81,6 +81,11 @@ export const migrate = async () => {
     await client.query(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS token TEXT`);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS agents_token_idx ON agents (token)`);
     await client.query(`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS session_id TEXT`);
+    await client.query(`ALTER TABLE assessments ADD COLUMN IF NOT EXISTS allow_reboot BOOLEAN DEFAULT FALSE`);
+    // Agent-reported config, surfaced by GET /api/agents/:hostname/config.
+    await client.query(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS dashboard_url TEXT`);
+    await client.query(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS log_path TEXT`);
+    await client.query(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS allow_reboot BOOLEAN DEFAULT FALSE`);
 
     console.log('✅ Database migrations complete.');
   } catch (err) {

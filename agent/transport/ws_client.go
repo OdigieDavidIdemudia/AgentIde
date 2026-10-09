@@ -22,25 +22,26 @@ import (
 type EventType string
 
 const (
-	EventFingerprint    EventType = "fingerprint"
-	EventDiscovery      EventType = "discovery"
-	EventPassiveAlert   EventType = "passive_alert"
-	EventTamper         EventType = "tamper_event"     // Agent was killed and recovered
-	EventModuleStart    EventType = "module_start"
-	EventModuleResult   EventType = "module_result"
-	EventAssessmentDone EventType = "assessment_done"
-	EventHeartbeat      EventType = "heartbeat"
-	EventPreScanResult  EventType = "pre_scan_result"  // Sent before assessment: list of discovered agents
-	EventAssessmentReady EventType = "assessment_ready" // Sent after vendor disabled, assessment is starting
-	EventReportStatus    EventType = "report_status"
-	EventPreflightResult EventType = "preflight_result"
+	EventFingerprint       EventType = "fingerprint"
+	EventDiscovery         EventType = "discovery"
+	EventPassiveAlert      EventType = "passive_alert"
+	EventTamper            EventType = "tamper_event" // Agent was killed and recovered
+	EventModuleStart       EventType = "module_start"
+	EventModuleResult      EventType = "module_result"
+	EventAssessmentDone    EventType = "assessment_done"
+	EventHeartbeat         EventType = "heartbeat"
+	EventPreScanResult     EventType = "pre_scan_result"  // Sent before assessment: list of discovered agents
+	EventAssessmentReady   EventType = "assessment_ready" // Sent after vendor disabled, assessment is starting
+	EventReportStatus      EventType = "report_status"
+	EventPreflightResult   EventType = "preflight_result"
 	EventAssessmentResumed EventType = "assessment_resumed" // Agent was killed and resumed from checkpoint
+	EventAssessmentAborted EventType = "assessment_aborted" // Auto-resume gave up after kill cap — operator must relaunch
 )
 
 // Event is the standard envelope sent over the WebSocket connection.
 type Event struct {
 	Type      EventType   `json:"type"`
-	AgentID   string      `json:"agent_id"`   // Hostname of the endpoint
+	AgentID   string      `json:"agent_id"` // Hostname of the endpoint
 	Timestamp string      `json:"timestamp"`
 	Payload   interface{} `json:"payload"`
 }
@@ -48,7 +49,7 @@ type Event struct {
 // Client manages a persistent, auto-reconnecting WebSocket connection
 // to the AgentIde Central Dashboard.
 type Client struct {
-	url        string
+	urls       []string
 	agentID    string
 	agentToken string
 	certPin    string
@@ -63,25 +64,15 @@ type Client struct {
 	CommandCh chan map[string]interface{}
 }
 
-// NewClient creates a new WebSocket transport client.
-// url should be the base wss:// address of the dashboard.
-// /agent path is appended automatically if not already present.
-// agentToken is the shared secret (or per-agent token) required by
-// the dashboard's AGENT_TOKEN. If certPin is non-empty it must be the
-// hex-encoded SHA-256 of the dashboard certificate's SubjectPublicKeyInfo,
-// and the certificate is pinned instead of blindly trusted.
-func NewClient(url, agentID, agentToken, certPin string, logger *core.Logger) *Client {
-	// Ensure the agent connects to the correct /agent path on the server
-	if !strings.HasSuffix(url, "/agent") {
-		url = strings.TrimRight(url, "/") + "/agent"
-	}
-	// Present the token as a query parameter
-	if agentToken != "" {
-		url += "?token=" + neturl.QueryEscape(agentToken)
-	}
+// NewClient builds a client that tries each dashboard URL in order until one
+// connects, then keeps reconnecting with exponential backoff. Listing several
+// comma-separated addresses (for example a host-only IP plus the Wi-Fi IP)
+// lets a single install survive network changes. The token is appended to each
+// URL, and the /agent path is added automatically when missing.
+func NewClient(dashboardURL, agentID, agentToken, certPin string, logger *core.Logger) *Client {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Client{
-		url:        url,
+		urls:       parseDashboardURLs(dashboardURL, agentToken),
 		agentID:    agentID,
 		agentToken: agentToken,
 		certPin:    certPin,
@@ -91,6 +82,35 @@ func NewClient(url, agentID, agentToken, certPin string, logger *core.Logger) *C
 		queue:      make(chan Event, 256),
 		CommandCh:  make(chan map[string]interface{}, 16),
 	}
+}
+
+// parseDashboardURLs turns a comma-separated list of dashboard addresses into
+// ready-to-dial WebSocket URLs. Each address has the /agent path appended when
+// missing and the auth token attached as a query parameter.
+func parseDashboardURLs(raw, token string) []string {
+	var urls []string
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if !strings.HasSuffix(part, "/agent") {
+			part = strings.TrimRight(part, "/") + "/agent"
+		}
+		if token != "" {
+			part += "?token=" + neturl.QueryEscape(token)
+		}
+		urls = append(urls, part)
+	}
+	return urls
+}
+
+// redactURL strips the query string so auth tokens are never written to logs.
+func redactURL(raw string) string {
+	if i := strings.Index(raw, "?"); i >= 0 {
+		return raw[:i]
+	}
+	return raw
 }
 
 // Connect establishes the WebSocket connection and starts the send loop.
@@ -141,9 +161,24 @@ func (c *Client) IsConnected() bool {
 }
 
 // connectLoop maintains a persistent connection with exponential backoff.
+// Each round it tries the configured dashboard URLs in order and keeps the
+// first one that connects, so a single install can survive subnet changes.
 func (c *Client) connectLoop() {
 	backoff := 2 * time.Second
 	const maxBackoff = 60 * time.Second
+
+	// Allow self-signed certificates for POC/internal deployments. When a cert
+	// pin is configured, the peer certificate's SPKI SHA-256 must match instead
+	// of trusting everything.
+	tlsConfig := &tls.Config{InsecureSkipVerify: true} //nolint:gosec
+	if c.certPin != "" {
+		tlsConfig.VerifyPeerCertificate = verifyPinnedCertificate(c.certPin)
+	}
+	opts := &websocket.DialOptions{
+		HTTPClient: &http.Client{
+			Transport: &http.Transport{TLSClientConfig: tlsConfig},
+		},
+	}
 
 	for {
 		select {
@@ -152,41 +187,47 @@ func (c *Client) connectLoop() {
 		default:
 		}
 
-		c.logger.Info("Transport: connecting to dashboard", map[string]interface{}{
-			"url": c.url,
-		})
+		var conn *websocket.Conn
+		var lastErr error
+		for _, url := range c.urls {
+			select {
+			case <-c.ctx.Done():
+				return
+			default:
+			}
 
-		// Allow self-signed certificates for POC/internal deployments.
-		// When a cert pin is configured, the peer certificate's SPKI
-		// SHA-256 must match instead of trusting everything.
-		tlsConfig := &tls.Config{InsecureSkipVerify: true} //nolint:gosec
-		if c.certPin != "" {
-			tlsConfig.VerifyPeerCertificate = verifyPinnedCertificate(c.certPin)
-		}
-		opts := &websocket.DialOptions{
-			HTTPClient: &http.Client{
-				Transport: &http.Transport{
-					TLSClientConfig: tlsConfig,
-				},
-			},
-		}
-
-		conn, _, err := websocket.Dial(c.ctx, c.url, opts)
-		if err != nil {
-			c.logger.Warn("Transport: connection failed, retrying", map[string]interface{}{
-				"error":   err.Error(),
-				"backoff": backoff.String(),
+			c.logger.Info("Transport: connecting to dashboard", map[string]interface{}{
+				"url": redactURL(url),
 			})
+			dialed, _, err := websocket.Dial(c.ctx, url, opts)
+			if err != nil {
+				lastErr = err
+				c.logger.Warn("Transport: connection attempt failed", map[string]interface{}{
+					"url":   redactURL(url),
+					"error": err.Error(),
+				})
+				continue
+			}
+			conn = dialed
+			break
+		}
+
+		if conn == nil {
 			c.mu.Lock()
 			c.connected = false
 			c.mu.Unlock()
+
+			fields := map[string]interface{}{"backoff": backoff.String()}
+			if lastErr != nil {
+				fields["error"] = lastErr.Error()
+			}
+			c.logger.Warn("Transport: all dashboard addresses unreachable, retrying", fields)
 
 			select {
 			case <-c.ctx.Done():
 				return
 			case <-time.After(backoff):
 			}
-
 			backoff *= 2
 			if backoff > maxBackoff {
 				backoff = maxBackoff
@@ -200,7 +241,7 @@ func (c *Client) connectLoop() {
 		c.mu.Unlock()
 
 		backoff = 2 * time.Second // Reset backoff on successful connection
-		c.logger.Info("Transport: connected to dashboard", map[string]interface{}{"url": c.url})
+		c.logger.Info("Transport: connected to dashboard — agent is reporting", nil)
 
 		// Block until connection drops
 		c.readLoop(conn)
@@ -212,6 +253,20 @@ func (c *Client) connectLoop() {
 
 		c.logger.Warn("Transport: connection lost, reconnecting...", nil)
 	}
+}
+
+// WaitForConnection blocks until the client reports a live connection or the
+// timeout elapses. It lets callers (e.g. -check and install-time diagnostics)
+// confirm the dashboard is actually reachable before declaring success.
+func WaitForConnection(s Sender, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if s.IsConnected() {
+			return true
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	return s.IsConnected()
 }
 
 // readLoop reads incoming messages from the dashboard and dispatches commands.
@@ -350,17 +405,17 @@ type NoopClient struct{}
 
 func NewNoopClient() *NoopClient { return &NoopClient{} }
 
-func (n *NoopClient) Connect()                              {}
-func (n *NoopClient) Disconnect()                           {}
-func (n *NoopClient) IsConnected() bool                     { return false }
-func (n *NoopClient) StartHeartbeat()                       {}
-func (n *NoopClient) Send(_ EventType, _ interface{})       {}
-func (n *NoopClient) SendFingerprint(_ interface{})         {}
-func (n *NoopClient) SendDiscovery(_ interface{})           {}
-func (n *NoopClient) SendPassiveAlert(_ interface{})        {}
-func (n *NoopClient) SendTamperEvent(_ interface{})         {}
-func (n *NoopClient) SendModuleResult(_ interface{})        {}
-func (n *NoopClient) SendAssessmentDone(_ interface{})      {}
+func (n *NoopClient) Connect()                         {}
+func (n *NoopClient) Disconnect()                      {}
+func (n *NoopClient) IsConnected() bool                { return false }
+func (n *NoopClient) StartHeartbeat()                  {}
+func (n *NoopClient) Send(_ EventType, _ interface{})  {}
+func (n *NoopClient) SendFingerprint(_ interface{})    {}
+func (n *NoopClient) SendDiscovery(_ interface{})      {}
+func (n *NoopClient) SendPassiveAlert(_ interface{})   {}
+func (n *NoopClient) SendTamperEvent(_ interface{})    {}
+func (n *NoopClient) SendModuleResult(_ interface{})   {}
+func (n *NoopClient) SendAssessmentDone(_ interface{}) {}
 func (n *NoopClient) Commands() <-chan map[string]interface{} {
 	return make(chan map[string]interface{}) // never receives anything
 }

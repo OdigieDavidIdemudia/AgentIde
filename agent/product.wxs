@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AgentIde Assessment Agent - WiX Toolset v6 package (v4 schema).
+
+  Build: build_msi.bat  (dotnet build — requires a .NET SDK; WiX restores
+  the WixToolset.Sdk from NuGet automatically).
+
+  Design follows the pattern used by vendor EDR agents (verified against the
+  Cortex XDR 9.2 MSI sample): service registration is driven by the agent's
+  own install logic (the agent's `install` flag) through a custom action rather than the ServiceInstall
+  table, so every hardening layer (failure recovery actions, service DACL,
+  self-protection guardian service, watchdog scheduled tasks, event log source,
+  config.json) is applied exactly as it is for a manual install, in one code path.
+
+  Silent install:
+    msiexec /i msi_output\AgentIDE_0.4.0.msi /qn DASHBOARD=wss://host:8080 TOKEN=<AGENT_TOKEN> [CERTPIN=<hex>]
+
+  Silent uninstall:
+    msiexec /x msi_output\AgentIDE_0.4.0.msi /qn
+
+  Note: TOKEN appears on the command line; it is also passed to a deferred
+  custom action marked HideTarget so it is not written to MSI logs.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Id="AgentIde.AssessmentAgent"
+           Name="AgentIde Assessment Agent"
+           Manufacturer="AgentIde Project"
+           Version="0.4.0"
+           UpgradeCode="{9D4E1F3B-6C2A-4B7E-9F1D-3A5C8E2B7D64}"
+           Scope="perMachine"
+           InstallerVersion="500"
+           Compressed="yes">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of AgentIde is already installed."
+                  AllowSameVersionUpgrades="yes" />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!--
+      Public properties (ALLCAPS so msiexec passes them through) consumed by
+      the agent's install-flag custom action below.
+    -->
+    <Property Id="DASHBOARD" Secure="yes" />
+    <Property Id="TOKEN" Secure="yes" />
+    <Property Id="CERTPIN" Secure="yes" />
+    <Property Id="REBOOT" Value="ReallySuppress" />
+
+    <!-- Launch conditions: 64-bit Windows, elevated install. -->
+    <Launch Condition="VersionNT64" Message="AgentIde requires 64-bit Windows 10 or later." />
+    <Launch Condition="Privileged" Message="AgentIde must be installed elevated. Run msiexec as Administrator." />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLDIR" Name="AgentIde" />
+    </StandardDirectory>
+
+    <Feature Id="ProductFeature" Title="AgentIde" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+    </Feature>
+
+    <!--
+      Custom actions (type 18: FileRef + ExeCommand runs the installed
+      agentide.exe).
+
+      InstallCA is deferred and non-impersonated, so it runs as SYSTEM -
+      the same context a vendor agent's service-registration actions use.
+      Deferred actions cannot read session properties, so the immediate
+      type-51 action below resolves the public properties into
+      CustomActionData first.
+    -->
+    <CustomAction Id="SetInstallCAData"
+                  Property="CustomActionData"
+                  Value="--install --dashboard &quot;[DASHBOARD]&quot; --token &quot;[TOKEN]&quot; --cert-pin &quot;[CERTPIN]&quot;"
+                  Execute="immediate"
+                  Return="check" />
+
+    <CustomAction Id="InstallCA"
+                  FileRef="AgentExe"
+                  ExeCommand="[CustomActionData]"
+                  Execute="deferred"
+                  Impersonate="no"
+                  HideTarget="yes"
+                  Return="check" />
+
+    <!-- If installation fails after service registration, roll it back. -->
+    <CustomAction Id="InstallRollbackCA"
+                  FileRef="AgentExe"
+                  ExeCommand="--uninstall"
+                  Execute="rollback"
+                  Impersonate="no"
+                  HideTarget="yes"
+                  Return="ignore" />
+
+    <!-- Uninstall: remove service + watchdog tasks before files are deleted. -->
+    <CustomAction Id="UninstallCA"
+                  FileRef="AgentExe"
+                  ExeCommand="--uninstall"
+                  Execute="deferred"
+                  Impersonate="no"
+                  HideTarget="yes"
+                  Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="SetInstallCAData" After="InstallInitialize" Condition="NOT Installed" />
+      <Custom Action="InstallCA" After="InstallFiles" Condition="NOT Installed" />
+      <Custom Action="InstallRollbackCA" After="InstallCA" Condition="NOT Installed" />
+      <Custom Action="UninstallCA" Before="RemoveFiles" Condition="Installed AND REMOVE~=&quot;ALL&quot;" />
+    </InstallExecuteSequence>
+  </Package>
+
+  <Fragment>
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLDIR">
+      <Component Id="AgentBinary">
+        <File Id="AgentExe" Source="agentide.exe" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

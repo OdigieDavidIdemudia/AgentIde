@@ -65,9 +65,9 @@ type vendorActions struct {
 
 // DisableResult holds the outcome of a disable attempt.
 type DisableResult struct {
-	Vendor    string
-	Disabled  bool
-	Notes     string
+	Vendor   string
+	Disabled bool
+	Notes    string
 }
 
 // Disable temporarily disables the specified vendor's protection.

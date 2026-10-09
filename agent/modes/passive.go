@@ -45,7 +45,7 @@ func watchInstallations(cfg *core.Config, logger *core.Logger, sender transport.
 
 	for range ticker.C {
 		logger.Debug("Passive watch tick", nil)
-		
+
 		agents, err := discovery.Scan()
 		if err != nil {
 			logger.Warn("Discovery scan failed", map[string]interface{}{"error": err.Error()})

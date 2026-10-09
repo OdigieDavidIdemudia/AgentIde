@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAgentContext } from '../../context/AgentContext.jsx';
 import styles from './LiveConsole.module.css';
+import { EmptyState } from '../../components/ui.jsx';
 
 const EVENT_COLORS = {
   fingerprint:          'var(--accent)',
@@ -11,6 +12,7 @@ const EVENT_COLORS = {
   module_result:        '#06d6a0',
   assessment_done:      'var(--accent)',
   assessment_resumed:   '#ff9f1c',   // bright orange — EDR kill detected, resuming
+  assessment_aborted:   '#ef476f',   // red — auto-resume gave up, operator must relaunch
   passive_alert:        '#ef476f',
   agent_disconnected:   '#ef476f',
   tamper_event:         '#ff0055',
@@ -29,17 +31,26 @@ function formatPayload(payload) {
 export default function LiveConsole() {
   const { state, dispatch, sendCommand } = useAgentContext();
   const navigate = useNavigate();
-  const bottomRef = useRef(null);
+  const terminalRef = useRef(null);
+  const stickToBottomRef = useRef(true);
 
   // Pre-scan confirmation modal state
   const [preScan, setPreScan] = useState(null);   // { agentId, agents, supportedDisabling, profile, testType }
   const [selectedVendor, setSelectedVendor] = useState('none');
 
+  // Only auto-scroll while the operator is already at the bottom, so incoming
+  // events don't steal the viewport while they're reading earlier output.
   useEffect(() => {
-    if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    const el = terminalRef.current;
+    if (!el || !stickToBottomRef.current) return;
+    el.scrollTop = el.scrollHeight;
   }, [state.events]);
+
+  const handleTerminalScroll = () => {
+    const el = terminalRef.current;
+    if (!el) return;
+    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  };
 
   // Listen for pre_scan_result events from the agent
   useEffect(() => {
@@ -240,19 +251,13 @@ export default function LiveConsole() {
       )}
 
       {state.events.length === 0 ? (
-        <div className={styles.emptyState}>
-          <h3>No active stream</h3>
-          <p>Launch an assessment from the Fleet View to view real-time telemetry here.</p>
-          <button
-            className="btn-primary"
-            style={{ marginTop: 'var(--spacing-lg)' }}
-            onClick={() => navigate('/')}
-          >
-            Go to Fleet View
-          </button>
-        </div>
+        <EmptyState
+          title="No active stream"
+          message="Launch an assessment from the Fleet View to view real-time telemetry here."
+          action={<button className="btn-primary" onClick={() => navigate('/')}>Go to Fleet View</button>}
+        />
       ) : (
-        <div className={styles.terminal}>
+        <div className={styles.terminal} ref={terminalRef} onScroll={handleTerminalScroll}>
           {state.events.map((ev, i) => (
             <div key={i} className={styles.eventRow}>
               <span className={styles.ts}>{ev.timestamp ? new Date(ev.timestamp).toLocaleTimeString() : ''}</span>
@@ -265,7 +270,6 @@ export default function LiveConsole() {
               )}
             </div>
           ))}
-          <div ref={bottomRef} />
         </div>
       )}
     </div>

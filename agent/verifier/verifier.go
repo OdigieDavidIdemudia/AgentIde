@@ -39,12 +39,13 @@ func Verify(raw modules.RawResult) reporter.TestResult {
 	detail := buildDetail(raw, passed)
 
 	return reporter.TestResult{
-		ModuleName:  raw.ModuleName,
-		Action:      raw.Action,
-		Passed:      passed,
-		Detail:      detail,
-		ElapsedMs:   raw.ElapsedMs,
-		Notes:       raw.Notes,
+		ModuleName: raw.ModuleName,
+		Action:     raw.Action,
+		Passed:     passed,
+		Detail:     detail,
+		ElapsedMs:  raw.ElapsedMs,
+		Notes:      raw.Notes,
+		Artifacts:  raw.Artifacts,
 	}
 }
 
@@ -53,8 +54,9 @@ func isPassed(raw modules.RawResult) bool {
 	fb := raw.OSFeedback
 	switch raw.ModuleName {
 	case "malware":
-		// Pass if the EICAR file was quarantined (vanished from disk)
-		return fb.FileVanished
+		// Pass if the EICAR file was quarantined (vanished from disk) OR the
+		// execution attempt was blocked by the endpoint's protection.
+		return fb.FileVanished || fb.ProcessKilled || fb.AccessDenied
 
 	case "antitamper":
 		// Pass if the OS denied every tamper attempt
@@ -96,9 +98,12 @@ func buildDetail(raw modules.RawResult, passed bool) string {
 	switch raw.ModuleName {
 	case "malware":
 		if passed {
-			return "PASS — EICAR quarantined in " + msToStr(fb.VanishTimeMs)
+			if fb.FileVanished {
+				return "PASS — EICAR blocked/quarantined in " + msToStr(fb.VanishTimeMs)
+			}
+			return "PASS — EICAR execution blocked by endpoint protection"
 		}
-		return "FAIL — EICAR file remained on disk for 5m"
+		return "FAIL — EICAR file remained on disk and execution was not blocked"
 
 	case "antitamper":
 		if passed {

@@ -20,14 +20,15 @@ const (
 
 // ModuleRecord captures the outcome of a single completed module.
 type ModuleRecord struct {
-	Name      string `json:"name"`
-	Passed    bool   `json:"passed"`
-	Result    string `json:"result"`
-	Detail    string `json:"detail"`
-	MitreID   string `json:"mitre"`
-	DurationMs int64  `json:"duration_ms"`
-	TestType  string `json:"test_type"`
-	Timestamp string `json:"timestamp"`
+	Name       string   `json:"name"`
+	Passed     bool     `json:"passed"`
+	Result     string   `json:"result"`
+	Detail     string   `json:"detail"`
+	MitreID    string   `json:"mitre"`
+	DurationMs int64    `json:"duration_ms"`
+	TestType   string   `json:"test_type"`
+	Timestamp  string   `json:"timestamp"`
+	Artifacts  []string `json:"artifacts,omitempty"`
 }
 
 // AssessmentState is the full persistent checkpoint of an in-progress assessment.
@@ -45,15 +46,22 @@ type AssessmentState struct {
 	EDRKillCount int `json:"edr_kill_count"`
 }
 
-// stateFilePath returns the canonical path for the state file.
-func stateFilePath() string {
+// stateDir returns the directory holding persisted assessment files,
+// creating it if needed. Stored under %PROGRAMDATA% so it survives
+// binary moves and is writable by the service account.
+func stateDir() string {
 	base := os.Getenv("PROGRAMDATA")
 	if base == "" {
 		base = os.TempDir()
 	}
 	dir := filepath.Join(base, "AgentIde")
 	_ = os.MkdirAll(dir, 0755)
-	return filepath.Join(dir, "assessment_state.json")
+	return dir
+}
+
+// stateFilePath returns the canonical path for the state file.
+func stateFilePath() string {
+	return filepath.Join(stateDir(), "assessment_state.json")
 }
 
 // Load reads the persisted state from disk. Returns nil if no state exists.
@@ -128,4 +136,60 @@ func New(sessionID, targetVendor, profile, testType string) (*AssessmentState, e
 		EDRKillCount:     0,
 	}
 	return s, Save(s)
+}
+
+// ── Resume intent ───────────────────────────────────────────────────────────
+// The state file records *what* has completed; the intent records *how* the
+// operator launched the assessment (vendor disable, profile, test type).
+// The auto-resume path needs both: the state file alone cannot tell us
+// whether the vendor was disabled when the EDR killed us, and resuming
+// without re-applying that choice would mix measurement conditions.
+
+// Intent captures the confirm_assessment context needed to replay an
+// interrupted assessment exactly as the operator launched it.
+type Intent struct {
+	DisableVendor string    `json:"disable_vendor"`
+	Profile       string    `json:"profile"`
+	TestType      string    `json:"test_type"`
+	Days          int       `json:"days"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+// intentFilePath returns the path of the resume-intent file.
+func intentFilePath() string {
+	return filepath.Join(stateDir(), "resume_intent.json")
+}
+
+// SaveIntent persists the operator's choices before an assessment starts.
+// It survives a process kill alongside the state file.
+func SaveIntent(i Intent) error {
+	data, err := json.MarshalIndent(i, "", "  ")
+	if err != nil {
+		return err
+	}
+	path := intentFilePath()
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+// LoadIntent reads the persisted intent. Returns nil if none exists.
+func LoadIntent() *Intent {
+	data, err := os.ReadFile(intentFilePath())
+	if err != nil {
+		return nil
+	}
+	var i Intent
+	if err := json.Unmarshal(data, &i); err != nil {
+		return nil
+	}
+	return &i
+}
+
+// ClearIntent removes the intent file. Called once the assessment has
+// either completed or definitively given up.
+func ClearIntent() {
+	_ = os.Remove(intentFilePath())
 }

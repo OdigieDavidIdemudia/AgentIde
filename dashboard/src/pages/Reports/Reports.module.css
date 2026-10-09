@@ -29,7 +29,7 @@
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  color: var(--n-400);
+  color: var(--text-secondary);
   font-family: inherit;
   font-size: 0.85rem;
   cursor: pointer;
@@ -38,7 +38,7 @@
 }
 
 .tab:hover {
-  color: var(--n-100);
+  color: var(--text-primary);
 }
 
 .tabActive {
@@ -59,7 +59,7 @@
 }
 
 .emptyState p {
-  color: var(--n-400);
+  color: var(--text-secondary);
   margin-top: var(--spacing-xs);
 }
 
@@ -80,7 +80,7 @@
 
 .summaryLabel {
   font-size: 0.75rem;
-  color: var(--n-500);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: var(--spacing-xxs);
@@ -95,7 +95,7 @@
 .summaryValue.pass { color: #06d6a0; }
 .summaryValue.fail { color: #ef476f; }
 .summaryValue.warn { color: #ffd166; }
-.summaryValue.neutral { color: var(--n-200); }
+.summaryValue.neutral { color: var(--text-primary); }
 
 /* Section */
 .section {
@@ -106,7 +106,7 @@
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: var(--n-500);
+  color: var(--text-secondary);
   margin-bottom: var(--spacing-sm);
   padding-bottom: var(--spacing-xs);
   border-bottom: 1px solid var(--border);
@@ -147,7 +147,7 @@
 .badgeFAIL   { background: rgba(239,71,111,0.15); color: #ef476f; border: 1px solid rgba(239,71,111,0.3); }
 .badgeBLOCKED{ background: rgba(255,0,85,0.15);   color: #ff0055; border: 1px solid rgba(255,0,85,0.3); }
 .badgeFIXED  { background: rgba(255,209,102,0.15);color: #ffd166; border: 1px solid rgba(255,209,102,0.3); }
-.badgeINFO   { background: rgba(150,150,150,0.1);  color: var(--n-400); border: 1px solid var(--border); }
+.badgeINFO   { background: rgba(150,150,150,0.1);  color: var(--text-secondary); border: 1px solid var(--border); }
 
 .typeBadge {
   display: inline-block;
@@ -164,13 +164,13 @@
 .typeInternal { background: rgba(150,150,150,0.1); color: var(--n-500); border: 1px solid var(--border); }
 
 .findingTitle {
-  color: var(--n-200);
+  color: var(--text-primary);
   font-weight: 500;
 }
 
 .findingDetail {
   font-size: 0.75rem;
-  color: var(--n-500);
+  color: var(--text-secondary);
   margin-top: 2px;
   font-family: 'JetBrains Mono', monospace;
 }
@@ -184,5 +184,5 @@
 .mitre {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.7rem;
-  color: var(--n-600);
+  color: var(--text-secondary);
 }

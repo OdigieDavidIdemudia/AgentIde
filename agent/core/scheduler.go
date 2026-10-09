@@ -17,9 +17,9 @@ const (
 
 // Scheduler controls the pacing and timing of test module execution.
 type Scheduler struct {
-	Profile  Profile
-	Days     int
-	StartAt  time.Time
+	Profile   Profile
+	Days      int
+	StartAt   time.Time
 	StateFile string
 }
 

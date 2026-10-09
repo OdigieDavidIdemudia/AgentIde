@@ -15,12 +15,15 @@ type Module interface {
 
 // RawResult is the unverified output from a module's execution attempt.
 type RawResult struct {
-	ModuleName  string
-	MitreID     string
-	Action      string // Human-readable description of what was attempted
-	OSFeedback  OSFeedback
-	ElapsedMs   int64
-	Notes       string
+	ModuleName string
+	MitreID    string
+	Action     string // Human-readable description of what was attempted
+	OSFeedback OSFeedback
+	ElapsedMs  int64
+	Notes      string
+	// Artifacts lists every file/registry path the module created or touched,
+	// so the report can show exactly what was written to disk.
+	Artifacts []string
 }
 
 // OSFeedback captures the raw OS-level signals observed after an action.

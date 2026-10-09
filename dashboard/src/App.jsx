@@ -7,20 +7,14 @@ import { setToken } from './api.js';
 // Pages
 import FleetView from './pages/FleetView/FleetView.jsx';
 import Login from './pages/Login/Login.jsx';
-
-// Base pages with standard empty states (admin-standard.json)
-const EmptyState = ({ title, message, action }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--spacing-2xl)', border: '1px dashed var(--border)', borderRadius: '4px', textAlign: 'center', marginTop: 'var(--spacing-xl)' }}>
-    <h3>{title}</h3>
-    <p style={{ margin: 'var(--spacing-md) 0' }}>{message}</p>
-    {action}
-  </div>
-);
-
 import Assessments from './pages/Assessments/Assessments.jsx';
 import LiveConsole from './pages/LiveConsole/LiveConsole.jsx';
-
 import Reports from './pages/Reports/Reports.jsx';
+import AgentManagement from './pages/AgentManagement/AgentManagement.jsx';
+import ServerManagement from './pages/ServerManagement/ServerManagement.jsx';
+import { EmptyState } from './components/ui.jsx';
+
+// Base pages with standard empty states (admin-standard.json)
 const Users = () => <div><h2>Users & Access</h2><EmptyState title="No additional users" message="You are the only administrator. Invite team members to grant them access." action={<button className="btn-primary">Invite User</button>} /></div>;
 
 function App() {
@@ -53,6 +47,8 @@ function App() {
             <Route path="/console" element={<LiveConsole />} />
             <Route path="/console/:assessmentId" element={<LiveConsole />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/agents" element={<AgentManagement />} />
+            <Route path="/server" element={<ServerManagement />} />
             <Route path="/users" element={<Users />} />
           </Routes>
         </main>
@@ -62,4 +58,3 @@ function App() {
 }
 
 export default App;
-

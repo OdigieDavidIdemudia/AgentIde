@@ -44,6 +44,13 @@ export function isAgentTokenValid(token) {
   return expected !== '' && token === expected;
 }
 
+// Short, non-reversible fingerprint of a token for diagnostics. Never log the
+// token itself; compare fingerprints instead.
+export function tokenFingerprint(token) {
+  if (!token) return 'MISSING';
+  return crypto.createHash('sha256').update(String(token)).digest('hex').slice(0, 12);
+}
+
 // Admin login credentials (set via ADMIN_EMAIL / ADMIN_PASSWORD).
 export function checkAdminCredentials(email, password) {
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@agentide.local';

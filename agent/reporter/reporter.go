@@ -10,6 +10,8 @@ type TestResult struct {
 	Detail     string
 	ElapsedMs  int64
 	Notes      string
+	// Artifacts lists the files created/touched by this module.
+	Artifacts []string
 }
 
 // Report aggregates all test results for final output generation.

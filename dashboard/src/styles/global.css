@@ -7,6 +7,10 @@
   padding: 0;
 }
 
+html, body {
+  height: 100%;
+}
+
 body {
   background-color: var(--bg);
   color: var(--text-primary);
@@ -14,6 +18,9 @@ body {
   font-size: var(--font-base);
   line-height: var(--lh-body);
   transition: background-color 0.2s, color 0.2s;
+  /* The app owns scrolling (inside .main-content); the document itself must
+     never scroll, otherwise pages get a second scrollbar and content jumps. */
+  overflow: hidden;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -41,14 +48,23 @@ button {
 /* Base App Layout */
 #root {
   display: flex;
-  height: 100vh;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 
 .main-content {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   padding: var(--spacing-2xl);
   overflow-y: auto;
+  overflow-x: hidden;
+  /* Keep wheel/touch scrolling contained to the content pane (no scroll
+     chaining to the body) and reserve the scrollbar width so the layout
+     doesn't shift when the scrollbar appears/disappears. */
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 /* Utility Classes */
@@ -78,6 +94,11 @@ button {
 
 .btn-primary:hover {
   background-color: var(--accent-hover);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .btn-secondary {
@@ -111,4 +132,10 @@ button {
 
 .btn-danger:hover {
   background-color: rgba(255, 0, 85, 0.1);
+}
+
+.btn-secondary:disabled,
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

@@ -41,6 +41,19 @@ export default function Sidebar({ onLogout }) {
         </NavLink>
         <div className={styles.divider} style={{ margin: 'var(--spacing-md) var(--spacing-xl)', backgroundColor: 'var(--border)', height: '1px' }}></div>
         <NavLink 
+          to="/agents" 
+          className={({ isActive }) => isActive ? `${styles.navItem} ${styles.active}` : styles.navItem}
+        >
+          Agent Management
+        </NavLink>
+        <NavLink 
+          to="/server" 
+          className={({ isActive }) => isActive ? `${styles.navItem} ${styles.active}` : styles.navItem}
+        >
+          Server Management
+        </NavLink>
+        <div className={styles.divider} style={{ margin: 'var(--spacing-md) var(--spacing-xl)', backgroundColor: 'var(--border)', height: '1px' }}></div>
+        <NavLink 
           to="/users" 
           className={({ isActive }) => isActive ? `${styles.navItem} ${styles.active}` : styles.navItem}
         >

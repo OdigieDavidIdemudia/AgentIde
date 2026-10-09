@@ -2,11 +2,13 @@ import './env.js'; // must load .env before db.js creates the connection pool
 import express from 'express';
 import https from 'https';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import cors from 'cors';
 import { setupWebSockets } from './ws-server.js';
 import { pool } from './db.js';
 import { issueToken, revokeToken, requireAuth, checkAdminCredentials, isLoginAllowed, registerLoginFailure } from './auth.js';
+import { getLatestAgent, buildUpdateCommand } from './agent-update.js';
 
 const allowedOrigins = (process.env.CORS_ORIGINS || '')
   .split(',')
@@ -16,22 +18,7 @@ const allowedOrigins = (process.env.CORS_ORIGINS || '')
 const app = express();
 // Same-origin by default; widen via CORS_ORIGINS (comma-separated).
 app.use(cors(allowedOrigins.length > 0 ? { origin: allowedOrigins } : { origin: false }));
-
-// DEBUG: log every request BEFORE body parsing
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-  next();
-});
-
 app.use(express.json());
-
-// DEBUG: log after body parsing
-app.use((req, res, next) => {
-  if (Object.keys(req.body || {}).length > 0) {
-    console.log(`[${new Date().toISOString()}] BODY:`, req.body);
-  }
-  next();
-});
 
 // ── Auth ──────────────────────────────────────────────────────────
 app.post('/api/auth/login', (req, res) => {
@@ -56,6 +43,35 @@ app.post('/api/auth/logout', requireAuth, (req, res) => {
 
 // Session validity check — used by the frontend to detect expiry.
 app.get('/api/auth/me', requireAuth, (req, res) => res.json({ ok: true }));
+
+// Public liveness probe — deliberately unauthenticated so you can verify the
+// dashboard is reachable from an agent host before wiring up the agent:
+//   curl -k https://<dashboard-ip>:8443/healthz
+app.get('/healthz', (req, res) =>
+  res.json({ status: 'ok', service: 'AgentIde', time: new Date().toISOString() }),
+);
+
+// Public agent self-update endpoints. An agent may need to fetch an update
+// before it has an authenticated session, so these are unauthenticated; the
+// payload is integrity-checked with SHA-256 on the agent side.
+app.get('/api/agent/version', (req, res) => {
+  const latest = getLatestAgent();
+  if (!latest) return res.status(503).json({ error: 'No agent build available' });
+  res.json({
+    version: latest.version,
+    sha256: latest.sha256,
+    size: latest.size,
+    url: '/api/agent/download',
+  });
+});
+
+app.get('/api/agent/download', (req, res) => {
+  const latest = getLatestAgent();
+  if (!latest) return res.status(503).json({ error: 'No agent build available' });
+  res.type('application/octet-stream');
+  res.setHeader('Content-Disposition', 'attachment; filename="agentide.exe"');
+  res.sendFile(latest.path);
+});
 
 // Every other API route requires a valid session token.
 app.use('/api', requireAuth);
@@ -123,7 +139,7 @@ app.get('/api/assessments', async (req, res) => {
 });
 
 app.post('/api/assessments', async (req, res) => {
-  let { agent_id, profile, duration_days, modules } = req.body;
+  let { agent_id, profile, duration_days, modules, allow_reboot } = req.body;
   try {
     // If agent_id is a hostname instead of a UUID, resolve it
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(agent_id)) {
@@ -135,10 +151,10 @@ app.post('/api/assessments', async (req, res) => {
     }
 
     const result = await pool.query(`
-      INSERT INTO assessments (agent_id, profile, duration_days, modules, status)
-      VALUES ($1, $2, $3, $4, 'running')
+      INSERT INTO assessments (agent_id, profile, duration_days, modules, status, allow_reboot)
+      VALUES ($1, $2, $3, $4, 'running', $5)
       RETURNING *
-    `, [agent_id, profile, duration_days, modules]);
+    `, [agent_id, profile, duration_days, modules, allow_reboot || false]);
     res.json(result.rows[0]);
   } catch (err) {
     console.error('Failed to create assessment:', err);
@@ -155,8 +171,13 @@ app.delete('/api/agents/:hostname', async (req, res) => {
     }
     const agentId = agentRes.rows[0].id;
     
-    // Manual cascade since foreign keys might not have ON DELETE CASCADE
+    // Manual cascade since foreign keys might not have ON DELETE CASCADE.
+    // results references assessments, so it must be cleared first.
     await pool.query('DELETE FROM events WHERE agent_id = $1', [agentId]);
+    await pool.query(
+      'DELETE FROM results WHERE assessment_id IN (SELECT id FROM assessments WHERE agent_id = $1)',
+      [agentId],
+    );
     await pool.query('DELETE FROM assessments WHERE agent_id = $1', [agentId]);
     await pool.query('DELETE FROM agents WHERE id = $1', [agentId]);
     
@@ -173,16 +194,17 @@ app.post('/api/generate-report', async (req, res) => {
     return res.status(500).json({ error: 'GEMINI_API_KEY environment variable is not set in .env' });
   }
   
-  const reportData = req.body;
-  const prompt = `You are an elite Security Assessor. 
+  const { format = 'html', ...reportData } = req.body;
+  
+  const basePrompt = `You are an elite Security Assessor. 
 You are performing a standalone configuration review and EDR assessment based on AgentIde telemetry.
 You will be given raw test results in JSON format.
 
-You must generate a professional HTML report that strictly follows the GTCO Standalone Configuration Review format.
+You must generate a professional report that strictly follows the GTCO Standalone Configuration Review format.
 
 Requirements:
-- Use the Abadi font family (or Arial as fallback).
 - Include an "Introduction" and "Scope of Assessment" section.
+- Scope of Assessment must include: test types (rapid/apt/baseline), test types (blackbox/whitebox/deployment), modules tested, target EDR vendor, date range.
 - For each finding (especially FAILED tests), structure it exactly as:
   <h3>[Index]. [Module Name: Action] - [SEVERITY]</h3>
   (Severity should be CRITICAL or HIGH for fails, colored red. LOW for passes, colored green).
@@ -193,13 +215,20 @@ Requirements:
   <div style="background-color: #2E5FA2; color: white; padding: 4px 8px; font-weight: bold; margin-top: 10px;">Recommendation</div>
   <ul><li>[Remediation step]</li></ul>
 
-Return ONLY valid HTML inside <html><body>...</body></html> tags. Do not include markdown blocks like \`\`\`html.
-
 Raw Data:
 ${JSON.stringify(reportData, null, 2)}`;
 
+  let prompt = basePrompt;
+  if (format === 'markdown') {
+    prompt += '\n\nReturn ONLY valid Markdown. Use proper Markdown syntax with headers, tables, code blocks, and proper formatting.';
+  } else if (format === 'docx') {
+    prompt += '\n\nReturn ONLY valid Markdown that can be converted to DOCX. Use proper Markdown syntax with headers, tables, code blocks, and proper formatting. The output will be converted to DOCX format.';
+  } else {
+    prompt += '\n\nReturn ONLY valid HTML inside <html><body>...</body></html> tags. Do not include markdown blocks like ```html.';
+  }
+
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -212,11 +241,19 @@ ${JSON.stringify(reportData, null, 2)}`;
     if (!data.candidates || data.candidates.length === 0) {
       throw new Error(data.error?.message || 'Empty AI response');
     }
-    let htmlContent = data.candidates[0].content.parts[0].text;
-    if (htmlContent.startsWith('```html')) htmlContent = htmlContent.substring(7);
-    if (htmlContent.endsWith('```')) htmlContent = htmlContent.slice(0, -3);
+    let content = data.candidates[0].content.parts[0].text;
+    if (content.startsWith('```html')) content = content.substring(7);
+    if (content.startsWith('```markdown')) content = content.substring(10);
+    if (content.startsWith('```')) content = content.substring(3);
+    if (content.endsWith('```')) content = content.slice(0, -3);
     
-    res.json({ html: htmlContent.trim() });
+    if (format === 'markdown') {
+      res.json({ markdown: content.trim() });
+    } else if (format === 'docx') {
+      res.json({ docx: content.trim() });
+    } else {
+      res.json({ html: content.trim() });
+    }
   } catch (err) {
     console.error('AI Generation error:', err);
     res.status(500).json({ error: 'Failed to generate AI report' });
@@ -245,7 +282,7 @@ Provide the exact Group Policy Object (GPO) configuration, PowerShell remediatio
 Keep it concise. Use Markdown formatting. Return ONLY the markdown.`;
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -264,6 +301,184 @@ Keep it concise. Use Markdown formatting. Return ONLY the markdown.`;
     console.error('AI Remediation Generation error:', err);
     res.status(500).json({ error: 'Failed to generate remediation' });
   }
+});
+
+// ── Agent Management ─────────────────────────────────────────────
+app.post('/api/agents/:hostname/restart', async (req, res) => {
+  try {
+    const { hostname } = req.params;
+    const agentRes = await pool.query('SELECT id FROM agents WHERE hostname = $1', [hostname]);
+    if (agentRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    // Send restart command via WebSocket
+    const { registry } = await import('./agent-registry.js');
+    registry.sendToAgent(hostname, { type: 'restart_agent' });
+    res.json({ success: true, message: 'Restart command sent' });
+  } catch (err) {
+    console.error('Failed to send restart:', err);
+    res.status(500).json({ error: 'Failed to send restart command' });
+  }
+});
+
+// Manual agent self-update push. The browser's Host header identifies the
+// dashboard address the agent can reach (agents commonly connect to the same
+// address the operator uses).
+app.post('/api/agents/:hostname/update', async (req, res) => {
+  try {
+    const { hostname } = req.params;
+    const agentRes = await pool.query('SELECT id FROM agents WHERE hostname = $1', [hostname]);
+    if (agentRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    const cmd = buildUpdateCommand(req.headers.host, '');
+    if (!cmd) {
+      return res.status(503).json({ error: 'No agent build available to push' });
+    }
+    const { registry } = await import('./agent-registry.js');
+    registry.sendToAgent(hostname, cmd);
+    res.json({ success: true, message: `Update to v${cmd.version} sent` });
+  } catch (err) {
+    console.error('Failed to send update:', err);
+    res.status(500).json({ error: 'Failed to send update command' });
+  }
+});
+
+app.post('/api/agents/:hostname/uninstall', async (req, res) => {
+  try {
+    const { hostname } = req.params;
+    const agentRes = await pool.query('SELECT id FROM agents WHERE hostname = $1', [hostname]);
+    if (agentRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    // Send uninstall command via WebSocket
+    const { registry } = await import('./agent-registry.js');
+    registry.sendToAgent(hostname, { type: 'uninstall_agent' });
+    res.json({ success: true, message: 'Uninstall command sent' });
+  } catch (err) {
+    console.error('Failed to send uninstall:', err);
+    res.status(500).json({ error: 'Failed to send uninstall command' });
+  }
+});
+
+app.get('/api/agents/:hostname/config', async (req, res) => {
+  try {
+    const { hostname } = req.params;
+    const agentRes = await pool.query('SELECT * FROM agents WHERE hostname = $1', [hostname]);
+    if (agentRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    const agent = agentRes.rows[0];
+    // Return config (mask sensitive fields)
+    res.json({
+      dashboard_url: agent.dashboard_url,
+      log_path: agent.log_path,
+      allow_reboot: agent.allow_reboot,
+      // token is intentionally not returned
+    });
+  } catch (err) {
+    console.error('Failed to get agent config:', err);
+    res.status(500).json({ error: 'Failed to get agent config' });
+  }
+});
+
+// ── Server Management ────────────────────────────────────────────
+app.get('/api/health', async (req, res) => {
+  try {
+    const dbRes = await pool.query('SELECT 1');
+    const mem = process.memoryUsage();
+    res.json({
+      status: 'ok',
+      uptime: process.uptime(),
+      version: process.env.npm_package_version || '0.1.0',
+      node_version: process.version,
+      memory: {
+        heapUsed: mem.heapUsed,
+        heapTotal: mem.heapTotal,
+        external: mem.external,
+      },
+      db_connected: dbRes.rowCount === 1,
+    });
+  } catch (err) {
+    res.status(500).json({ status: 'error', error: err.message });
+  }
+});
+
+app.get('/api/stats', async (req, res) => {
+  try {
+    const [
+      agentsRes,
+      onlineAgentsRes,
+      assessmentsRes,
+      runningAssessmentsRes,
+      eventsRes,
+      dbSizeRes,
+      eventsTableSizeRes,
+    ] = await Promise.all([
+      pool.query('SELECT COUNT(*) FROM agents'),
+      pool.query("SELECT COUNT(*) FROM agents WHERE status = 'online'"),
+      pool.query('SELECT COUNT(*) FROM assessments'),
+      pool.query("SELECT COUNT(*) FROM assessments WHERE status = 'running'"),
+      pool.query('SELECT COUNT(*) FROM events'),
+      pool.query('SELECT pg_database_size(current_database()) as size'),
+      pool.query("SELECT pg_total_relation_size('events') as size"),
+    ]);
+    res.json({
+      total_agents: parseInt(agentsRes.rows[0].count),
+      online_agents: parseInt(onlineAgentsRes.rows[0].count),
+      total_assessments: parseInt(assessmentsRes.rows[0].count),
+      running_assessments: parseInt(runningAssessmentsRes.rows[0].count),
+      total_events: parseInt(eventsRes.rows[0].count),
+      db_size: parseInt(dbSizeRes.rows[0].size),
+      events_table_size: parseInt(eventsTableSizeRes.rows[0].size),
+    });
+  } catch (err) {
+    console.error('Failed to get stats:', err);
+    res.status(500).json({ error: 'Failed to get stats' });
+  }
+});
+
+app.post('/api/admin/retention', async (req, res) => {
+  try {
+    const { days } = req.body;
+    if (!days || days < 1 || days > 365) {
+      return res.status(400).json({ error: 'Invalid retention days (1-365)' });
+    }
+    // Update environment variable (runtime only, persists until restart)
+    process.env.EVENT_RETENTION_DAYS = String(days);
+    res.json({ success: true, days });
+  } catch (err) {
+    console.error('Failed to set retention:', err);
+    res.status(500).json({ error: 'Failed to set retention' });
+  }
+});
+
+app.post('/api/admin/prune', async (req, res) => {
+  try {
+    const retentionDays = Number(process.env.EVENT_RETENTION_DAYS) || 30;
+    const result = await pool.query(
+      `DELETE FROM events WHERE received_at < NOW() - ($1 * INTERVAL '1 day')`,
+      [retentionDays],
+    );
+    res.json({ deleted: result.rowCount });
+  } catch (err) {
+    console.error('Failed to prune events:', err);
+    res.status(500).json({ error: 'Failed to prune events' });
+  }
+});
+
+// Sanitized server config for the UI (no secrets)
+app.get('/api/admin/config', async (req, res) => {
+  res.json({
+    node_env: process.env.NODE_ENV || 'development',
+    port: process.env.PORT || '8443',
+    pghost: process.env.PGHOST || 'localhost',
+    pgport: process.env.PGPORT || '5432',
+    pgdatabase: process.env.PGDATABASE || 'postgres',
+    cors_origins: process.env.CORS_ORIGINS || '',
+    event_retention_days: process.env.EVENT_RETENTION_DAYS || '30',
+    // Secrets are intentionally omitted: PGPASSWORD, AGENT_TOKEN, ADMIN_PASSWORD, GEMINI_API_KEY
+  });
 });
 
 // Serve the compiled React UI
@@ -310,14 +525,45 @@ await pruneEvents();
 const retentionTimer = setInterval(pruneEvents, 60 * 60 * 1000);
 retentionTimer.unref();
 
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 8443;
 if (!process.env.AGENT_TOKEN) {
   console.warn('⚠️  AGENT_TOKEN is not set — agent connections to /agent will be REJECTED. Set it in ../.env');
 }
 if (!process.env.ADMIN_PASSWORD) {
   console.warn('⚠️  ADMIN_PASSWORD not set — using insecure default "agentide-dev". Set it in ../.env');
 }
+
+// Collect non-internal IPv4 addresses so we can print the exact URLs an
+// operator must hand to `agentide.exe -install -dashboard ...`. This is the
+// single most common reason an agent never shows up: it was pointed at the
+// wrong IP (or at localhost, which resolve to the agent itself).
+function lanAddresses() {
+  const addrs = [];
+  for (const ifaces of Object.values(os.networkInterfaces())) {
+    for (const iface of ifaces || []) {
+      if (iface.family === 'IPv4' && !iface.internal) addrs.push(iface.address);
+    }
+  }
+  return addrs;
+}
+
 server.listen(PORT, () => {
   console.log(`🚀 AgentIde Dashboard (TLS) running on https://localhost:${PORT}`);
   console.log(`🔌 WebSocket Hub running on wss://localhost:${PORT}/dashboard and /agent`);
+
+  const addrs = lanAddresses();
+  // Prefer the hostname: it resolves to whatever IP the host currently has,
+  // so it survives roaming Wi-Fi / bridged VMs that jump subnets.
+  const hostname = os.hostname();
+  console.log(`🛡️  Agent must connect to the dashboard host, NOT localhost.`);
+  console.log(`      (preferred — survives IP changes)  agentide.exe -install -dashboard wss://${hostname}:${PORT} -token <AGENT_TOKEN>`);
+  if (addrs.length === 0) {
+    console.log('      (no external IPv4 interface detected — agents on other hosts cannot reach this server)');
+  } else {
+    console.log('      or by IP (use if the agent cannot resolve the hostname):');
+    for (const ip of addrs) {
+      console.log(`      agentide.exe -install -dashboard wss://${ip}:${PORT} -token <AGENT_TOKEN>`);
+    }
+  }
+  console.log(`🩺 From the agent host, verify reachability with: curl -k https://${hostname}:${PORT}/healthz`);
 });

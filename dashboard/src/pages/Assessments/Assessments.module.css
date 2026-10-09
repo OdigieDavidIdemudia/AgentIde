@@ -19,14 +19,14 @@
 
 .formGroup label {
   font-weight: 500;
-  color: var(--n-200);
+  color: var(--text-primary);
 }
 
 .select {
   padding: var(--spacing-sm);
-  background-color: var(--n-900);
+  background-color: var(--surface-raised);
   border: 1px solid var(--border);
-  color: var(--n-50);
+  color: var(--text-primary);
   border-radius: 4px;
   font-family: inherit;
   font-size: 1rem;
@@ -35,4 +35,14 @@
 .select:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+.input {
+  padding: var(--spacing-sm);
+  background-color: var(--surface-raised);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 1rem;
 }

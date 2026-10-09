@@ -3,9 +3,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"agentide/core"
@@ -14,9 +16,23 @@ import (
 	"agentide/fingerprint"
 	"agentide/modes"
 	"agentide/resilience"
+	"agentide/state"
 	"agentide/transport"
+	"agentide/updater"
 	"agentide/watchdog"
 )
+
+// fingerprintPayload extends the raw endpoint fingerprint with the agent's
+// current config so the dashboard can display it (Fleet → agent config) and
+// operators can confirm at a glance which dashboard URL an endpoint dialed.
+func fingerprintPayload(fp *fingerprint.Fingerprint, cfg *core.Config) map[string]interface{} {
+	m := fp.ToMap()
+	m["dashboard_url"] = cfg.DashboardURL
+	m["log_path"] = cfg.LogPath
+	m["allow_reboot"] = cfg.AllowReboot
+	m["version"] = version
+	return m
+}
 
 // runAgent contains all the actual startup logic shared between
 // interactive CLI mode and Windows Service mode.
@@ -39,9 +55,11 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 	defer logger.Close()
 
 	logger.Info("AgentIde starting", map[string]interface{}{
-		"version": version,
-		"mode":    mode,
-		"profile": profile,
+		"version":          version,
+		"mode":             mode,
+		"profile":          profile,
+		"dashboard_url":    cfg.DashboardURL,
+		"token_configured": cfg.AgentToken != "",
 	})
 
 	// Fingerprint
@@ -69,7 +87,7 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 	sender.Connect()
 	defer sender.Disconnect()
 
-	sender.SendFingerprint(fp.ToMap())
+	sender.SendFingerprint(fingerprintPayload(fp, cfg))
 	sender.StartHeartbeat()
 
 	vendor := "None Detected"
@@ -106,9 +124,24 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 	// Scheduler + Mode dispatch
 	scheduler := core.NewScheduler(profile, days)
 
+	// assessMu serializes assessment execution between the startup
+	// auto-resume path and dashboard-confirmed runs — two assessments
+	// must never write to the checkpoint state concurrently.
+	var assessMu sync.Mutex
+
 	switch strings.ToLower(mode) {
 	case "passive":
 		logger.Info("Starting Passive Mode", nil)
+
+		// Auto-resume any assessment that was interrupted by an EDR kill.
+		// Runs in the background so dashboard commands (pre-scan requests)
+		// are still accepted while it works; assessMu keeps it mutually
+		// exclusive with a confirm_assessment that arrives meanwhile.
+		go func() {
+			assessMu.Lock()
+			defer assessMu.Unlock()
+			autoResumeAssessment(cfg, logger, sender)
+		}()
 
 		// Listen for start_assessment commands from the dashboard in the background
 		go func() {
@@ -137,6 +170,34 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 							logger.Info("Persisted per-agent token assigned by dashboard", nil)
 						}
 					}
+					continue
+				}
+
+				// ── Self-update ────────────────────────────────────────────────
+				// The dashboard advertises a newer agent build; download it,
+				// verify the hash, and swap the running executable in place.
+				if cmdType == "update_agent" {
+					ver, _ := cmd["version"].(string)
+					url, _ := cmd["url"].(string)
+					sum, _ := cmd["sha256"].(string)
+					logger.Info("update_agent received — starting self-update", map[string]interface{}{
+						"version": ver, "url": url,
+					})
+					sender.Send(transport.EventModuleResult, map[string]interface{}{
+						"module":    "agent_update",
+						"passed":    true,
+						"result":    "INFO",
+						"detail":    fmt.Sprintf("Downloading agent update %s", ver),
+						"test_type": "system",
+						"mitre":     "N/A",
+						"timestamp": time.Now().Format(time.RFC3339),
+					})
+					manifest := updater.Manifest{Version: ver, URL: url, SHA256: sum}
+					go func() {
+						if err := updater.Apply(manifest, logger); err != nil {
+							logger.Error("Self-update failed", map[string]interface{}{"error": err.Error()})
+						}
+					}()
 					continue
 				}
 
@@ -190,7 +251,23 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 
 				// ── Phase 2: User confirmed — proceed with optional disable ───────
 				if cmdType == "confirm_assessment" && pending != nil {
+					// Serialize with the startup auto-resume path so two
+					// assessments can never run concurrently.
+					assessMu.Lock()
+
 					disableVendor, _ := cmd["disable_vendor"].(string)
+
+					// Persist the operator's choices *before* the assessment
+					// starts: if the EDR kills us mid-run, the next startup
+					// needs this intent to replay the exact same context
+					// (vendor disable, profile, test type, duration).
+					_ = state.SaveIntent(state.Intent{
+						DisableVendor: disableVendor,
+						Profile:       pending.profile,
+						TestType:      pending.testType,
+						Days:          pending.days,
+						CreatedAt:     time.Now(),
+					})
 
 					liveAgents, _ := discovery.Scan()
 					target := discovery.DiscoveredAgent{Vendor: "None", ServiceName: "N/A", ProcessName: "N/A"}
@@ -261,6 +338,11 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 						guard.Stop()
 					}
 
+					// Assessment finished (or failed) — its context is no
+					// longer needed for auto-resume.
+					state.ClearIntent()
+					assessMu.Unlock()
+
 					pending = nil
 					continue
 				}
@@ -284,4 +366,138 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 		runner := modes.NewActiveRunner(cfg, logger, scheduler, target, module, sender, "blackbox")
 		_ = runner.Run()
 	}
+}
+
+// ── Auto-resume ─────────────────────────────────────────────────────────────
+
+const (
+	// maxAutoResumes caps how many times an interrupted assessment is
+	// automatically relaunched before giving up and asking the operator
+	// to relaunch it from the dashboard. Prevents an endless kill/resume
+	// loop against an EDR that kills the agent on sight.
+	maxAutoResumes = 5
+
+	// autoResumeDelay is a short backoff before resuming so the endpoint
+	// (and the EDR under test) has a moment to settle after the kill.
+	autoResumeDelay = 20 * time.Second
+)
+
+// autoResumeAssessment restarts an assessment that the EDR interrupted by
+// killing the agent process. Called at startup in passive mode. The state
+// checkpoint tells us what already completed; the resume intent tells us
+// how the operator launched it. ActiveRunner then skips completed modules,
+// records the kill on the module that was in flight as BLOCKED_BY_EDR
+// (a pass for the EDR), and reports the session as resumed.
+func autoResumeAssessment(cfg *core.Config, logger *core.Logger, sender transport.Sender) {
+	st := state.Load()
+	if st == nil || st.Status != state.StatusRunning {
+		// Nothing in flight — drop any stale intent left behind.
+		state.ClearIntent()
+		return
+	}
+
+	if st.EDRKillCount >= maxAutoResumes {
+		msg := fmt.Sprintf(
+			"Auto-resume gave up after %d kill(s) — relaunch the assessment from the dashboard",
+			st.EDRKillCount,
+		)
+		logger.Warn(msg, map[string]interface{}{"session_id": st.SessionID})
+		fmt.Printf("[ACTIVE] %s\n", msg)
+		sender.Send(transport.EventAssessmentAborted, map[string]interface{}{
+			"session_id":     st.SessionID,
+			"edr_kill_count": st.EDRKillCount,
+			"target":         st.TargetVendor,
+			"detail":         msg,
+			"timestamp":      time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	// Restore the operator's original choices; fall back to the values
+	// stored in the state file when no intent was persisted.
+	profile, testType, days, disableVendor := st.Profile, st.TestType, 1, ""
+	if intent := state.LoadIntent(); intent != nil {
+		if intent.Profile != "" {
+			profile = intent.Profile
+		}
+		if intent.TestType != "" {
+			testType = intent.TestType
+		}
+		if intent.Days > 0 {
+			days = intent.Days
+		}
+		disableVendor = intent.DisableVendor
+	}
+
+	logger.Info("Auto-resuming interrupted assessment", map[string]interface{}{
+		"session_id":        st.SessionID,
+		"target":            st.TargetVendor,
+		"edr_kill_count":    st.EDRKillCount + 1,
+		"completed_modules": st.CompletedModules,
+	})
+	fmt.Printf("\n[ACTIVE] *** Interrupted assessment found — auto-resuming (kill #%d) ***\n", st.EDRKillCount+1)
+	fmt.Printf("[ACTIVE] Session: %s | Completed so far: %v\n", st.SessionID, st.CompletedModules)
+
+	// Back off briefly so the endpoint settles after the kill.
+	time.Sleep(autoResumeDelay)
+
+	// Re-discover the target; prefer the vendor the assessment ran
+	// against so the runner's resume guard (same vendor + test type)
+	// matches and the checkpoint is kept instead of reset.
+	liveAgents, _ := discovery.Scan()
+	target := discovery.DiscoveredAgent{
+		Vendor:      st.TargetVendor,
+		ServiceName: "N/A",
+		ProcessName: "N/A",
+	}
+	for _, a := range liveAgents {
+		if a.Vendor == st.TargetVendor {
+			target = a
+			break
+		}
+	}
+
+	// Re-apply the vendor disable and re-arm the restore watchdog exactly
+	// like the dashboard-confirmed path does — measurement conditions stay
+	// consistent across the kill.
+	var restoreFn func()
+	var guard *watchdog.Guard
+	if disableVendor != "" && strings.ToLower(disableVendor) != "none" {
+		logger.Info("Re-disabling vendor for resumed assessment", map[string]interface{}{
+			"vendor": disableVendor,
+		})
+		result, restore := disabler.Disable(disableVendor)
+		restoreFn = restore
+		maxDuration := time.Duration(days)*24*time.Hour + time.Hour
+		g, err := watchdog.Start(disableVendor, 90*time.Second, maxDuration)
+		if err != nil {
+			logger.Warn("Failed to arm re-enable watchdog", map[string]interface{}{"error": err.Error()})
+		} else {
+			guard = g
+		}
+		sender.Send(transport.EventAssessmentReady, map[string]interface{}{
+			"vendor_disabled": result.Vendor,
+			"disabled":        result.Disabled,
+			"notes":           result.Notes,
+			"target":          target.Vendor,
+			"profile":         profile,
+			"detail":          "auto-resume after EDR kill",
+		})
+	}
+
+	sched := core.NewScheduler(profile, days)
+	runner := modes.NewActiveRunner(cfg, logger, sched, target, "all", sender, testType)
+	if err := runner.Run(); err != nil {
+		logger.Error("Resumed assessment failed", map[string]interface{}{"error": err.Error()})
+	}
+
+	// Always re-enable the vendor and disarm the watchdog, mirroring the
+	// dashboard-confirmed path.
+	if restoreFn != nil {
+		restoreFn()
+	}
+	if guard != nil {
+		guard.Stop()
+	}
+	state.ClearIntent()
 }

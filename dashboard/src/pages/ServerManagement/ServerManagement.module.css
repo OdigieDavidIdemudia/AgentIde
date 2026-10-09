@@ -1,0 +1,148 @@
+.container {
+  padding: var(--spacing-lg);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.loading {
+  padding: var(--spacing-2xl);
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: var(--spacing-lg);
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: var(--spacing-lg);
+}
+
+.card h3 {
+  margin: 0 0 var(--spacing-lg) 0;
+  font-family: var(--font-heading);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--spacing-sm);
+}
+
+.health {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.healthItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-xs) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.healthItem:last-child {
+  border-bottom: none;
+}
+
+.label {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.value {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.value.ok {
+  color: var(--accent);
+}
+
+.value.error {
+  color: #ef476f;
+}
+
+.stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.statRow {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--spacing-xs) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.statRow:last-child {
+  border-bottom: none;
+}
+
+.statLabel {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.statValue {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.configItem {
+  margin-bottom: var(--spacing-lg);
+}
+
+.configItem label {
+  display: block;
+  margin-bottom: var(--spacing-xs);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+.input {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.help {
+  margin-top: var(--spacing-xs);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.configActions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.env {
+  margin: 0;
+  padding: var(--spacing-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  overflow: auto;
+  max-height: 300px;
+}
