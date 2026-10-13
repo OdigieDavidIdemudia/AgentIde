@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"agentide/core"
@@ -367,13 +368,30 @@ func buildModuleList(cfg *core.Config, logger *core.Logger, target discovery.Dis
 	}
 }
 
+// filterModules resolves a module selector to the modules that should run.
+//
+// Accepts:
+//   - "all" (or empty) — every module
+//   - a single name, e.g. "malware" — preserved from the -module flag
+//   - a comma-separated list, e.g. "malware,identity" — the operator's
+//     selection from the dashboard, which was previously ignored entirely
+//
+// Names that match nothing are ignored rather than silently producing an
+// empty run; the caller logs the selection so a mismatch is visible.
 func filterModules(all []modules.Module, selector string) []modules.Module {
-	if selector == "all" {
+	selector = strings.TrimSpace(selector)
+	if selector == "" || selector == "all" {
 		return all
+	}
+	wanted := map[string]bool{}
+	for _, name := range strings.Split(selector, ",") {
+		if n := strings.TrimSpace(name); n != "" {
+			wanted[strings.ToLower(n)] = true
+		}
 	}
 	var filtered []modules.Module
 	for _, m := range all {
-		if m.Name() == selector {
+		if wanted[strings.ToLower(m.Name())] {
 			filtered = append(filtered, m)
 		}
 	}

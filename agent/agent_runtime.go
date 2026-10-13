@@ -22,6 +22,42 @@ import (
 	"agentide/watchdog"
 )
 
+// decodeStringList reads a module selection from a decoded JSON command.
+// The dashboard sends a []string, but a comma-separated string is also
+// accepted so an older or hand-rolled client still works. Returns nil for an
+// absent or empty value, which the caller treats as "run everything".
+func decodeStringList(v interface{}) []string {
+	switch t := v.(type) {
+	case []interface{}:
+		out := make([]string, 0, len(t))
+		for _, item := range t {
+			if s, ok := item.(string); ok {
+				if s = strings.TrimSpace(s); s != "" {
+					out = append(out, s)
+				}
+			}
+		}
+		return out
+	case []string:
+		out := make([]string, 0, len(t))
+		for _, s := range t {
+			if s = strings.TrimSpace(s); s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	case string:
+		var out []string
+		for _, s := range strings.Split(t, ",") {
+			if s = strings.TrimSpace(s); s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
+}
+
 // handleRemoteControl implements the management commands the dashboard sends
 // over the WebSocket (Agent Management → Restart / Uninstall, and the Fleet
 // view's right-click menu). These were previously accepted by the dashboard
@@ -255,6 +291,14 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 				profile  string
 				testType string
 				days     int
+				// modules is the operator's explicit selection. Empty means
+				// "run everything", which is also what the dashboard sends when
+				// no selection was made.
+				modules []string
+				// allowReboot lets the reboot/boot-gap module run. Previously
+				// this could only come from the agent's own --allow-reboot
+				// flag, so the dashboard checkbox had no effect at all.
+				allowReboot bool
 			}
 			var pending *pendingAssessment
 
@@ -325,6 +369,30 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 						cmdTestType = "blackbox"
 					}
 
+					// The operator's module selection. The dashboard has always
+					// collected this and persisted it to the assessments row, but it
+					// was never sent on the wire - the runner was hardcoded to
+					// "all", so the report claimed modules ran that never did.
+					cmdModules := decodeStringList(cmd["modules"])
+
+					// Duration in days. Previously taken only from the agent's own
+					// -days startup flag, so the dashboard's Duration picker was dead.
+					cmdDays := days
+					if v, ok := cmd["days"].(float64); ok && v > 0 {
+						cmdDays = int(v)
+					}
+
+					// Reboot consent. Accept both the boolean and a string form so
+					// either dashboard shape works. Absent key falls back to the
+					// agent's own --allow-reboot flag.
+					cmdAllowReboot := cfg.AllowReboot
+					switch v := cmd["allow_reboot"].(type) {
+					case bool:
+						cmdAllowReboot = v
+					case string:
+						cmdAllowReboot = v == "true"
+					}
+
 					logger.Info("start_assessment received — scanning for security agents", nil)
 
 					// Re-scan the endpoint right now
@@ -351,9 +419,11 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 
 					// Park the pending context so we can resume when confirm arrives
 					pending = &pendingAssessment{
-						profile:  cmdProfile,
-						testType: cmdTestType,
-						days:     days,
+						profile:     cmdProfile,
+						testType:    cmdTestType,
+						days:        cmdDays,
+						modules:     cmdModules,
+						allowReboot: cmdAllowReboot,
 					}
 
 					logger.Info("Pre-scan complete — waiting for user confirmation", map[string]interface{}{
@@ -434,9 +504,37 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 					})
 
 					sched := core.NewScheduler(pending.profile, pending.days)
-					runner := modes.NewActiveRunner(cfg, logger, sched, target, "all", sender, pending.testType)
+
+					// The reboot/boot-gap module gates on cfg.AllowReboot, which
+					// previously could only be set by the agent's --allow-reboot
+					// flag — so the dashboard's consent checkbox did nothing.
+					// Apply it for the duration of this run and restore after.
+					prevAllowReboot := cfg.AllowReboot
+					if pending.allowReboot != prevAllowReboot {
+						logger.Info("Applying reboot consent from dashboard", map[string]interface{}{
+							"allow_reboot": pending.allowReboot, "previous": prevAllowReboot,
+						})
+						cfg.AllowReboot = pending.allowReboot
+					}
+
+					// Honour the operator's module selection. An empty selection
+					// means "everything", which is what the dashboard sends when
+					// no boxes were ticked.
+					selector := "all"
+					if len(pending.modules) > 0 {
+						selector = strings.Join(pending.modules, ",")
+					}
+					logger.Info("Module selection resolved", map[string]interface{}{
+						"selector": selector, "modules": pending.modules,
+					})
+					runner := modes.NewActiveRunner(cfg, logger, sched, target, selector, sender, pending.testType)
 					if err := runner.Run(); err != nil {
 						logger.Error("Assessment failed", map[string]interface{}{"error": err.Error()})
+					}
+					// Restore the reboot consent the agent started with, so a
+					// one-off dashboard approval does not persist into later runs.
+					if pending.allowReboot != prevAllowReboot {
+						cfg.AllowReboot = prevAllowReboot
 					}
 
 					// Always re-enable the vendor after the assessment, whether it passed or failed
