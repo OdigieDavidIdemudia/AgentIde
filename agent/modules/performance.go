@@ -24,14 +24,31 @@ type perfSample struct {
 
 func (m *performanceModule) Name() string { return "performance" }
 
+// Sampling budget, in one place so the module and the runner's per-module
+// timeout cannot drift apart. Previously the module slept 5x10s plus a 1s
+// cpu.Percent call per sample (~56s) while the runner killed any module at
+// 35s, so performance could never complete - it always reported TIMEOUT and
+// never contributed a measurement.
+//
+// 4 samples at 5s with a 1s cpu.Percent call is ~24s of work, which fits
+// inside the 45s budget with headroom.
+const (
+	perfSamples      = 4
+	perfIntervalSec  = 5
+	perfSampleBudget = 45 * time.Second
+)
+
 func (m *performanceModule) Run() RawResult {
 	result := RawResult{
 		ModuleName: m.Name(),
 		MitreID:    "T1082",
-		Action:     "Collect CPU and RAM usage over 60 seconds (10s intervals)",
+		Action: fmt.Sprintf("Collect CPU and RAM usage over ~%ds (%d samples)",
+			perfSamples*perfIntervalSec, perfSamples),
 	}
 
-	m.logger.Info("Performance: sampling started", map[string]interface{}{"samples": 6, "interval_s": 10})
+	m.logger.Info("Performance: sampling started", map[string]interface{}{
+		"samples": perfSamples, "interval_s": perfIntervalSec,
+	})
 	start := time.Now()
 
 	// Reset the sample buffer so a second run in the same process measures only
@@ -39,7 +56,16 @@ func (m *performanceModule) Run() RawResult {
 	// a re-run inherited the previous assessment's numbers.
 	m.samples = nil
 
-	for i := 0; i < 6; i++ {
+	deadline := start.Add(perfSampleBudget)
+	for i := 0; i < perfSamples; i++ {
+		// Stop early rather than overrun and get killed by the runner: a partial
+		// series is still a usable measurement, whereas TIMEOUT is a total loss.
+		if i > 0 && time.Now().After(deadline) {
+			m.logger.Warn("Performance sampling hit its budget early", map[string]interface{}{
+				"collected": len(m.samples), "of": perfSamples,
+			})
+			break
+		}
 		sample, err := collectSample()
 		if err != nil {
 			m.logger.Warn("Performance sample failed", map[string]interface{}{"error": err.Error()})
@@ -51,8 +77,8 @@ func (m *performanceModule) Run() RawResult {
 				"mem_pct": sample.MemPercent,
 			})
 		}
-		if i < 5 {
-			time.Sleep(10 * time.Second)
+		if i < perfSamples-1 {
+			time.Sleep(perfIntervalSec * time.Second)
 		}
 	}
 

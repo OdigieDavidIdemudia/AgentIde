@@ -32,6 +32,9 @@ import (
 // Every command acknowledges the outcome back to the dashboard before acting,
 // so a failure is visible instead of silent.
 func handleRemoteControl(cmdType string, logger *core.Logger, sender transport.Sender) bool {
+	// `passed` must only be false for an actual FAIL. An INFO acknowledgement
+	// is not a failure, and treating it as one made every successful restart,
+	// uninstall and update render as a red FAIL row in the Live Console.
 	ack := func(result, detail string) {
 		if sender != nil {
 			sender.Send(transport.EventModuleResult, map[string]interface{}{

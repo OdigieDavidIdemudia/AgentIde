@@ -65,11 +65,16 @@ func (r *ActiveRunner) runModuleSafely(mod modules.Module) (result modules.RawRe
 			"timestamp": time.Now().Format(time.RFC3339),
 		})
 		return modules.RawResult{}, true
-	case <-time.After(35 * time.Second):
+
+	// 45s, not 35s. The slowest module (performance) legitimately samples for
+	// ~24s and network waits on outbound connections; 35s left almost no
+	// headroom and turned ordinary slow samples into a forced TIMEOUT. Modules
+	// that genuinely hang still get caught - this is a ceiling, not a target.
+	case <-time.After(45 * time.Second):
 		r.logger.Warn("Module hung and timed out", map[string]interface{}{"module": mod.Name()})
 		r.sender.SendModuleResult(map[string]interface{}{
 			"module": mod.Name(), "passed": false, "result": "TIMEOUT",
-			"detail":    "module hung for over 35 seconds and was forcefully timed out",
+			"detail":    "module exceeded the 45s per-module budget and was forcefully timed out",
 			"test_type": r.testType,
 			"mitre":     "Unknown",
 			"timestamp": time.Now().Format(time.RFC3339),
