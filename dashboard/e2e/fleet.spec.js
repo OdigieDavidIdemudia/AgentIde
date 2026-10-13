@@ -85,11 +85,13 @@ async function openMenu(page, hostname) {
 
 test.beforeEach(async ({ page }) => {
   const errors = [];
-  // AgentContext opens a WebSocket to wss://<host>/dashboard, but the Vite dev
-  // server is plain HTTP on :3000, so that socket always fails with
-  // ERR_SSL_PROTOCOL_ERROR under test. It is a harness artifact, not an app
-  // defect - filter it so real console errors still fail the suite.
-  const wsNoise = /ERR_SSL_PROTOCOL_ERROR|WebSocket connection to 'wss:\/\//;
+  // AgentContext opens a WebSocket to the dashboard socket. Under test there is
+  // no real agent/session behind it, so the socket always fails — either at
+  // the TLS layer (ERR_SSL_PROTOCOL_ERROR) or, now that the dev proxy is used
+  // correctly, with an auth rejection from the real server. Both are harness
+  // artifacts, not app defects; filter them so genuine console errors still
+  // fail the suite.
+  const wsNoise = /ERR_SSL_PROTOCOL_ERROR|WebSocket connection to '(wss?|https?):\/\/|HTTP Authentication failed/;
   page.on('console', (m) => {
     if (m.type() === 'error' && !wsNoise.test(m.text())) errors.push(m.text());
   });

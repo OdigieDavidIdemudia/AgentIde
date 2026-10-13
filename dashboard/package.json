@@ -13,7 +13,7 @@
     "start": "node server/index.js",
     "db:migrate": "node server/db.js migrate",
     "cert:generate": "node scripts/generate-cert.js",
-    "test": "node --test \"server/**/*.test.js\"",
+    "test": "node --test \"server/**/*.test.js\" \"src/**/*.test.js\"",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:all": "npm test && npm run test:e2e"
