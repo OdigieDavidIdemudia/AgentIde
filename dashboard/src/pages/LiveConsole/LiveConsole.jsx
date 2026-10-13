@@ -247,6 +247,19 @@ export default function LiveConsole() {
           <div style={{ fontSize: '0.78rem', color: 'var(--n-500)', marginTop: 'var(--spacing-xs)', textTransform: 'uppercase' }}>
             Running: {progressData.module}
           </div>
+          <div style={{ marginTop: 'var(--spacing-sm)', textAlign: 'right' }}>
+            <button
+              onClick={() => sendCommand('stop_assessment', { assessment_id: progressData.agentId })}
+              style={{
+                padding: 'var(--spacing-xs) var(--spacing-md)',
+                background: '#ef476f', border: 'none', color: '#fff',
+                borderRadius: '4px', cursor: 'pointer',
+                fontFamily: 'var(--font-mono)', fontSize: '0.75rem', fontWeight: 700
+              }}
+            >
+              Stop Assessment
+            </button>
+          </div>
         </div>
       )}
 

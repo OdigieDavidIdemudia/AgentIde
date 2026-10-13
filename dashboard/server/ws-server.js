@@ -91,6 +91,9 @@ export function setupWebSockets(server) {
         } else if (msg.type === 'confirm_assessment') {
           console.log(`✅ confirm_assessment → agent_id="${msg.agent_id}" disable_vendor="${msg.disable_vendor}"`);
           registry.sendToAgent(msg.agent_id, msg);
+        } else if (msg.type === 'stop_assessment') {
+          console.log(`🛑 stop_assessment → agent_id="${msg.agent_id}" assessment_id="${msg.assessment_id}"`);
+          registry.sendToAgent(msg.agent_id, msg);
         } else {
           // Previously unknown browser commands vanished with no trace, so a
           // protocol drift was invisible from both ends. Log it.

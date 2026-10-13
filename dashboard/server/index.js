@@ -344,6 +344,35 @@ app.post('/api/assessments', async (req, res) => {
   }
 });
 
+// Stop a running assessment. Flips the assessment row to 'stopped' and
+// sends a stop_assessment command to the agent over the WebSocket so the
+// runner can exit cleanly. Returns 409 if the assessment is not running
+// (already stopped/completed) or the agent is offline.
+app.post('/api/assessments/:id/stop', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      `UPDATE assessments SET status = 'stopped', completed_at = NOW()
+       WHERE id = $1 AND status = 'running'
+       RETURNING id, agent_id`,
+      [id],
+    );
+    if (result.rows.length === 0) {
+      return res.status(409).json({ error: 'Assessment not running or does not exist' });
+    }
+    const { agent_id } = result.rows[0];
+    const { registry } = await import('./agent-registry.js');
+    const sent = registry.sendToAgent(agent_id, { type: 'stop_assessment', assessment_id: id });
+    if (!sent.ok) {
+      return res.status(409).json({ error: sent.error });
+    }
+    res.json({ success: true, message: 'Stop command sent to agent' });
+  } catch (err) {
+    console.error('Failed to stop assessment:', err);
+    res.status(500).json({ error: 'Failed to stop assessment' });
+  }
+});
+
 app.delete('/api/agents/:hostname', async (req, res) => {
   const { hostname } = req.params;
   try {

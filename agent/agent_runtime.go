@@ -270,6 +270,10 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 	// must never write to the checkpoint state concurrently.
 	var assessMu sync.Mutex
 
+	// currentRunner holds the ActiveRunner for the currently running
+	// assessment so that a stop_assessment command can signal it.
+	var currentRunner *modes.ActiveRunner
+
 	switch strings.ToLower(mode) {
 	case "passive":
 		logger.Info("Starting Passive Mode", nil)
@@ -432,6 +436,31 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 					continue
 				}
 
+				// ── Stop assessment: operator requested a graceful abort ─────────
+				if cmdType == "stop_assessment" {
+					logger.Info("stop_assessment received — signalling active runner to stop", nil)
+					ack := func(result, detail string) {
+						if sender != nil {
+							sender.Send(transport.EventModuleResult, map[string]interface{}{
+								"module":    "remote_control",
+								"passed":    result == "OK",
+								"result":    result,
+								"detail":    detail,
+								"test_type": "system",
+								"mitre":     "N/A",
+								"timestamp": time.Now().Format(time.RFC3339),
+							})
+						}
+					}
+					if currentRunner != nil {
+						currentRunner.Stop()
+						ack("OK", "Stop signal sent to assessment runner")
+					} else {
+						ack("INFO", "No active assessment to stop")
+					}
+					continue
+				}
+
 				// ── Phase 2: User confirmed — proceed with optional disable ───────
 				if cmdType == "confirm_assessment" && pending != nil {
 					// Serialize with the startup auto-resume path so two
@@ -528,9 +557,15 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 						"selector": selector, "modules": pending.modules,
 					})
 					runner := modes.NewActiveRunner(cfg, logger, sched, target, selector, sender, pending.testType)
+
+					// Register the runner so a stop_assessment command can signal it.
+					currentRunner = runner
 					if err := runner.Run(); err != nil {
 						logger.Error("Assessment failed", map[string]interface{}{"error": err.Error()})
 					}
+					// Clear the runner reference so a subsequent stop command
+					// doesn't try to signal a finished runner.
+					currentRunner = nil
 					// Restore the reboot consent the agent started with, so a
 					// one-off dashboard approval does not persist into later runs.
 					if pending.allowReboot != prevAllowReboot {

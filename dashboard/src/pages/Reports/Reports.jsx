@@ -511,9 +511,23 @@ export default function Reports() {
             >
               {label} · {r.profile || 'unknown'}
               {r.status !== 'completed' && (
-                <span style={{ marginLeft: 6, fontSize: '0.7em', color: 'var(--accent)' }}>
-                  {r.status}
-                </span>
+                <button
+                  style={{
+                    marginLeft: 6,
+                    padding: '2px 8px',
+                    fontSize: '0.7em',
+                    background: '#ef476f',
+                    border: 'none',
+                    color: '#fff',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                  onClick={() => sendCommand('stop_assessment', { assessment_id: r.id })}
+                  title="Stop this running assessment"
+                >
+                  Stop
+                </button>
               )}
             </button>
           );

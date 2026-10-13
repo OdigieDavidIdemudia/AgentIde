@@ -36,6 +36,7 @@ const (
 	EventPreflightResult   EventType = "preflight_result"
 	EventAssessmentResumed EventType = "assessment_resumed" // Agent was killed and resumed from checkpoint
 	EventAssessmentAborted EventType = "assessment_aborted" // Auto-resume gave up after kill cap — operator must relaunch
+	EventAssessmentStopped EventType = "assessment_stopped" // Operator requested a graceful stop
 )
 
 // Event is the standard envelope sent over the WebSocket connection.

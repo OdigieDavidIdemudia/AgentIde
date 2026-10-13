@@ -27,6 +27,7 @@ type ActiveRunner struct {
 	module    string
 	sender    transport.Sender
 	testType  string // "whitebox" or "blackbox"
+	stopCh    chan struct{} // closed when a stop_assessment command is received
 }
 
 // NewActiveRunner creates a configured ActiveRunner.
@@ -34,10 +35,41 @@ func NewActiveRunner(cfg *core.Config, logger *core.Logger, scheduler *core.Sche
 	if testType == "" {
 		testType = "blackbox"
 	}
-	return &ActiveRunner{cfg: cfg, logger: logger, scheduler: scheduler, target: target, module: module, sender: sender, testType: testType}
+	return &ActiveRunner{
+		cfg:       cfg,
+		logger:    logger,
+		scheduler: scheduler,
+		target:    target,
+		module:    module,
+		sender:    sender,
+		testType:  testType,
+		stopCh:    make(chan struct{}),
+	}
 }
 
-// runModuleSafely executes a module and catches any panics or hangs to prevent full agent crash.
+// Stop signals the runner to stop at the next safe point (between modules
+// or within a module's timeout). It is safe to call multiple times.
+func (r *ActiveRunner) Stop() {
+	select {
+	case <-r.stopCh:
+		// already closed
+	default:
+		close(r.stopCh)
+	}
+}
+
+// stopped returns true if Stop() has been called.
+func (r *ActiveRunner) stopped() bool {
+	select {
+	case <-r.stopCh:
+		return true
+	default:
+		return false
+	}
+}
+
+// runModuleSafely executes a module and catches any panics, hangs, or stop
+// signals to prevent full agent crash and allow graceful abort.
 func (r *ActiveRunner) runModuleSafely(mod modules.Module) (result modules.RawResult, recovered bool) {
 	resCh := make(chan modules.RawResult, 1)
 	panicCh := make(chan interface{}, 1)
@@ -61,6 +93,17 @@ func (r *ActiveRunner) runModuleSafely(mod modules.Module) (result modules.RawRe
 		r.sender.SendModuleResult(map[string]interface{}{
 			"module": mod.Name(), "passed": false, "result": "ERROR",
 			"detail":    fmt.Sprintf("module panicked: %v", rec),
+			"test_type": r.testType,
+			"mitre":     "Unknown",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return modules.RawResult{}, true
+
+	case <-r.stopCh:
+		r.logger.Warn("Module stopped by operator", map[string]interface{}{"module": mod.Name()})
+		r.sender.SendModuleResult(map[string]interface{}{
+			"module": mod.Name(), "passed": false, "result": "STOPPED",
+			"detail":    "module aborted by stop_assessment command",
 			"test_type": r.testType,
 			"mitre":     "Unknown",
 			"timestamp": time.Now().Format(time.RFC3339),
@@ -209,6 +252,15 @@ func (r *ActiveRunner) Run() error {
 		if assessState.HasCompleted(mod.Name()) {
 			fmt.Printf("[ACTIVE] Skipping '%s' (already completed in prior session)\n", mod.Name())
 			continue
+		}
+
+		// Check for a stop request before starting the next module.
+		if r.stopped() {
+			r.logger.Info("Stop signal received — aborting assessment", nil)
+			r.sender.Send(transport.EventAssessmentStopped, map[string]interface{}{
+				"reason": "stop_assessment command received",
+			})
+			return fmt.Errorf("assessment stopped by operator")
 		}
 
 		if !r.scheduler.ShouldRunNow(i, len(selectedModules)) {
