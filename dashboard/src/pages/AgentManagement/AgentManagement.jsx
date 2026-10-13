@@ -89,6 +89,7 @@ export default function AgentManagement() {
               <tr>
                 <th>Hostname</th>
                 <th>OS</th>
+                <th>OS Version</th>
                 <th>EDR Vendor</th>
                 <th>Status</th>
                 <th>Mode</th>
@@ -100,7 +101,8 @@ export default function AgentManagement() {
               {agents.map(agent => (
                 <tr key={agent.hostname}>
                   <td style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{agent.hostname}</td>
-                  <td>{agent.os} {agent.os_version}</td>
+                  <td>{agent.os || 'Unknown'}</td>
+                  <td>{agent.os_version || <span style={{ color: "var(--n-500)" }}>Unknown</span>}</td>
                   <td>{agent.vendor || <span style={{ color: "var(--n-500)" }}>Unknown</span>}</td>
                   <td>
                     <span className={`${styles.status} ${agent.status === "online" ? styles.online : styles.offline}`}>

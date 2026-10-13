@@ -138,8 +138,163 @@ app.get('/api/assessments', async (req, res) => {
   }
 });
 
+// Assessment history for one agent, newest first. The Reports UI used to build
+// its whole view from live WebSocket events, which meant a dashboard restart
+// wiped the visible history — the rows below survive restarts.
+app.get('/api/agents/:hostname/assessments', async (req, res) => {
+  try {
+    const { hostname } = req.params;
+    const agentRes = await pool.query('SELECT id FROM agents WHERE hostname = $1', [hostname]);
+    if (agentRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    const result = await pool.query(`
+      SELECT a.*,
+             (SELECT COUNT(*) FROM results r WHERE r.assessment_id = a.id) AS result_count
+      FROM assessments a
+      WHERE a.agent_id = $1
+      ORDER BY a.started_at DESC
+    `, [agentRes.rows[0].id]);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Failed to get agent assessments:', err);
+    res.status(500).json({ error: 'Failed to get agent assessments' });
+  }
+});
+
+// Every module result for one assessment. Returns artifacts and notes as
+// separate columns so historical rows written before the artifacts column
+// existed (where paths were JSON-encoded into notes) can still be read back.
+app.get('/api/assessments/:id/results', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const assessmentRes = await pool.query('SELECT id FROM assessments WHERE id = $1', [id]);
+    if (assessmentRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Assessment not found' });
+    }
+    const result = await pool.query(`
+      SELECT r.*, a.profile, a.started_at, ag.hostname
+      FROM results r
+      JOIN assessments a ON a.id = r.assessment_id
+      JOIN agents ag ON ag.id = a.agent_id
+      WHERE r.assessment_id = $1
+      ORDER BY r.recorded_at ASC
+    `, [id]);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Failed to get assessment results:', err);
+    res.status(500).json({ error: 'Failed to get assessment results' });
+  }
+});
+
+// Aggregated view for one agent: one row per assessment run, grouped by
+// profile so a rapid and a performance run stay distinguishable over time.
+app.get('/api/agents/:hostname/summary', async (req, res) => {
+  try {
+    const { hostname } = req.params;
+    const agentRes = await pool.query('SELECT id FROM agents WHERE hostname = $1', [hostname]);
+    if (agentRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    const agentId = agentRes.rows[0].id;
+    const runs = await pool.query(`
+      SELECT a.id, a.profile, a.test_type, a.status, a.score, a.score_source,
+             a.passed, a.failed, a.skipped,
+             a.started_at, a.completed_at,
+             COUNT(r.id) AS result_count,
+             COUNT(r.id) FILTER (WHERE r.passed)  AS pass_count,
+             COUNT(r.id) FILTER (WHERE NOT r.passed) AS fail_count
+      FROM assessments a
+      LEFT JOIN results r ON r.assessment_id = a.id
+      WHERE a.agent_id = $1
+      GROUP BY a.id
+      ORDER BY a.started_at DESC
+    `, [agentId]);
+
+    const byProfile = await pool.query(`
+      SELECT a.profile,
+             COUNT(*)              AS run_count,
+             AVG(a.score)::float   AS avg_score,
+             MAX(a.started_at)     AS last_run
+      FROM assessments a
+      WHERE a.agent_id = $1 AND a.score IS NOT NULL
+      GROUP BY a.profile
+      ORDER BY last_run DESC
+    `, [agentId]);
+
+    // Blackbox vs whitebox comparison — these measure different things, so a
+    // single blended score would be misleading.
+    const byTestType = await pool.query(`
+      SELECT COALESCE(a.test_type, 'unspecified') AS test_type,
+             COUNT(DISTINCT a.id)   AS run_count,
+             AVG(a.score)::float    AS avg_score,
+             MIN(a.score)::float    AS min_score,
+             MAX(a.score)::float    AS max_score,
+             MAX(a.started_at)      AS last_run
+      FROM assessments a
+      WHERE a.agent_id = $1 AND a.score IS NOT NULL
+      GROUP BY COALESCE(a.test_type, 'unspecified')
+      ORDER BY last_run DESC
+    `, [agentId]);
+
+    // Per-module-category pass rate across all runs, so "which module family is
+    // consistently failing" is answerable without pulling every result row.
+    const byCategory = await pool.query(`
+      SELECT COALESCE(r.category, r.module_name, 'unknown') AS category,
+             COUNT(*)::int                                AS total,
+             COUNT(*) FILTER (WHERE r.passed)::int         AS passed,
+             COUNT(*) FILTER (WHERE NOT r.passed)::int     AS failed,
+             ROUND(100.0 * COUNT(*) FILTER (WHERE r.passed) / NULLIF(COUNT(*), 0), 1) AS pass_rate
+      FROM results r
+      JOIN assessments a ON a.id = r.assessment_id
+      WHERE a.agent_id = $1
+      GROUP BY COALESCE(r.category, r.module_name, 'unknown')
+      ORDER BY pass_rate ASC NULLS LAST, total DESC
+    `, [agentId]);
+
+    // Cross-tab: category performance split by test type. This is the view that
+    // answers "does this EDR behave differently when it knows the agent is there".
+    const categoryByTestType = await pool.query(`
+      SELECT COALESCE(r.category, r.module_name, 'unknown')          AS category,
+             COALESCE(r.test_type, a.test_type, 'unspecified')       AS test_type,
+             COUNT(*)::int                                           AS total,
+             ROUND(100.0 * COUNT(*) FILTER (WHERE r.passed) / NULLIF(COUNT(*), 0), 1) AS pass_rate
+      FROM results r
+      JOIN assessments a ON a.id = r.assessment_id
+      WHERE a.agent_id = $1
+      GROUP BY COALESCE(r.category, r.module_name, 'unknown'),
+               COALESCE(r.test_type, a.test_type, 'unspecified')
+      ORDER BY category, test_type
+    `, [agentId]);
+
+    // Overall 0-100 scope score across all recorded results.
+    const overall = await pool.query(`
+      SELECT COUNT(*)::int AS total,
+             COUNT(*) FILTER (WHERE r.passed)::int AS passed,
+             COUNT(*) FILTER (WHERE NOT r.passed)::int AS failed,
+             ROUND(100.0 * COUNT(*) FILTER (WHERE r.passed) / NULLIF(COUNT(*), 0), 1) AS score
+      FROM results r
+      JOIN assessments a ON a.id = r.assessment_id
+      WHERE a.agent_id = $1
+    `, [agentId]);
+
+    res.json({
+      hostname,
+      overall: overall.rows[0],
+      runs: runs.rows,
+      by_profile: byProfile.rows,
+      by_test_type: byTestType.rows,
+      by_category: byCategory.rows,
+      category_by_test_type: categoryByTestType.rows,
+    });
+  } catch (err) {
+    console.error('Failed to get agent summary:', err);
+    res.status(500).json({ error: 'Failed to get agent summary' });
+  }
+});
+
 app.post('/api/assessments', async (req, res) => {
-  let { agent_id, profile, duration_days, modules, allow_reboot } = req.body;
+  let { agent_id, profile, duration_days, modules, allow_reboot, test_type } = req.body;
   try {
     // If agent_id is a hostname instead of a UUID, resolve it
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(agent_id)) {
@@ -151,10 +306,18 @@ app.post('/api/assessments', async (req, res) => {
     }
 
     const result = await pool.query(`
-      INSERT INTO assessments (agent_id, profile, duration_days, modules, status, allow_reboot)
-      VALUES ($1, $2, $3, $4, 'running', $5)
+      INSERT INTO assessments (agent_id, profile, duration_days, modules, status, allow_reboot, test_type)
+      VALUES ($1, $2, $3, $4, 'running', $5, $6)
       RETURNING *
-    `, [agent_id, profile, duration_days, modules, allow_reboot || false]);
+    `, [agent_id, profile, duration_days, modules, allow_reboot || false, test_type || null]);
+
+    // Mark the endpoint as under test. ws-server drops this back to 'watch'
+    // when assessment_done arrives.
+    await pool.query(
+      `UPDATE agents SET state = 'assessment', assessment_id = $1 WHERE id = $2`,
+      [result.rows[0].id, agent_id],
+    );
+
     res.json(result.rows[0]);
   } catch (err) {
     console.error('Failed to create assessment:', err);
@@ -311,9 +474,14 @@ app.post('/api/agents/:hostname/restart', async (req, res) => {
     if (agentRes.rows.length === 0) {
       return res.status(404).json({ error: 'Agent not found' });
     }
-    // Send restart command via WebSocket
+    // Send restart command via WebSocket. The registry reports whether the
+    // command was actually delivered — an offline agent must return an error,
+    // not a "success" that silently did nothing.
     const { registry } = await import('./agent-registry.js');
-    registry.sendToAgent(hostname, { type: 'restart_agent' });
+    const sent = registry.sendToAgent(hostname, { type: 'restart_agent' });
+    if (!sent.ok) {
+      return res.status(409).json({ error: sent.error });
+    }
     res.json({ success: true, message: 'Restart command sent' });
   } catch (err) {
     console.error('Failed to send restart:', err);
@@ -336,7 +504,10 @@ app.post('/api/agents/:hostname/update', async (req, res) => {
       return res.status(503).json({ error: 'No agent build available to push' });
     }
     const { registry } = await import('./agent-registry.js');
-    registry.sendToAgent(hostname, cmd);
+    const sent = registry.sendToAgent(hostname, cmd);
+    if (!sent.ok) {
+      return res.status(409).json({ error: sent.error });
+    }
     res.json({ success: true, message: `Update to v${cmd.version} sent` });
   } catch (err) {
     console.error('Failed to send update:', err);
@@ -353,7 +524,10 @@ app.post('/api/agents/:hostname/uninstall', async (req, res) => {
     }
     // Send uninstall command via WebSocket
     const { registry } = await import('./agent-registry.js');
-    registry.sendToAgent(hostname, { type: 'uninstall_agent' });
+    const sent = registry.sendToAgent(hostname, { type: 'uninstall_agent' });
+    if (!sent.ok) {
+      return res.status(409).json({ error: sent.error });
+    }
     res.json({ success: true, message: 'Uninstall command sent' });
   } catch (err) {
     console.error('Failed to send uninstall:', err);

@@ -91,12 +91,17 @@ export function AgentProvider({ children, token }) {
       dispatch({ type: 'ADD_EVENT', payload: msg });
       
       if (msg.type === 'fingerprint') {
-        // New agent or re-connection — upsert into agent list
+        // New agent or re-connection — upsert into agent list. The agent
+        // reports its build as `version`, but the REST rows (and the Fleet
+        // view) use `agent_version`; map it here so a live WS update does not
+        // wipe the value the initial /api/agents fetch supplied.
+        const p = msg.payload || {};
         dispatch({ type: 'UPSERT_AGENT', payload: {
           hostname: msg.agent_id,
           status: 'online',
           last_seen: new Date().toISOString(),
-          ...(msg.payload || {})
+          ...p,
+          ...(p.version ? { agent_version: p.version } : {}),
         }});
       }
 
@@ -105,7 +110,19 @@ export function AgentProvider({ children, token }) {
       }
       
       if (msg.type === 'discovery') {
-        dispatch({ type: 'UPDATE_AGENT', payload: { hostname: msg.agent_id, vendor: msg.payload?.discovered_vendor } });
+        // Agents report one entry per discovered vendor. v0.4.3+ sends an
+        // array; older agents send a single object. Handle both so the Fleet
+        // view populates either way.
+        const entries = Array.isArray(msg.payload) ? msg.payload : [msg.payload];
+        const vendors = entries
+          .map(e => (e && (e.discovered_vendor || e.vendor)) || null)
+          .filter(Boolean);
+        if (vendors.length > 0) {
+          dispatch({
+            type: 'UPDATE_AGENT',
+            payload: { hostname: msg.agent_id, vendor: vendors[0], vendors },
+          });
+        }
       }
 
       if (msg.type === 'agent_disconnected') {
