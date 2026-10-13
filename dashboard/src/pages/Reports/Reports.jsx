@@ -28,6 +28,58 @@ function typeBadge(category, styles) {
   return <span className={`${styles.typeBadge} ${cls}`}>{label}</span>;
 }
 
+// Results that are informational, not a pass/fail verdict. A module that
+// acks with INFO (remote_control restarting itself, agent_update applying a
+// build) is reporting an action taken, not a control that was tested - so it
+// must never be counted or rendered as a failure.
+const NON_VERDICT_RESULTS = new Set(["INFO", "SKIPPED", "BLOCKED", "FIXED", "AGENT_RECOVERED"]);
+
+// Derive the display result from a payload. Prefers the module's own `result`
+// field when present, because `passed` is only a boolean and cannot express
+// BLOCKED_BY_EDR, TIMEOUT, ERROR or INFO.
+function deriveResult(payload) {
+  if (!payload) return "INFO";
+  const r = payload.result;
+  if (r) return r;
+  if (payload.passed === true) return "PASS";
+  if (payload.passed === false) return "FAIL";
+  return "INFO";
+}
+
+// The verdict a row contributes to the pass/fail tally. Only real test
+// outcomes count; an INFO acknowledgement must not drag the score down.
+function isVerdictPass(result) {
+  return result === "PASS" || result === "BLOCKED" || result === "BLOCKED_BY_EDR" || result === "AGENT_RECOVERED";
+}
+
+// Turn a raw event payload into one readable sentence. Falls back to the
+// event type instead of JSON.stringify(payload), which used to dump a raw
+// object into the detail column whenever a module sent no `detail` field.
+function humaniseDetail(payload) {
+  if (!payload) return "";
+  if (payload.detail) return payload.detail;
+
+  const parts = [];
+  const add = (k, v) => {
+    if (v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0)) {
+      parts.push(`${k.replace(/_/g, " ")}: ${Array.isArray(v) ? v.join(", ") : v}`);
+    }
+  };
+  add("result", payload.result);
+  add("status", payload.status);
+  add("vendor", payload.vendor);
+  add("mitre", payload.mitre);
+  add("duration", payload.elapsed_ms != null ? `${payload.elapsed_ms}ms` : null);
+  add("version", payload.version);
+
+  // Nothing human-readable in the payload at all.
+  if (parts.length === 0) return "No additional detail reported.";
+
+  // Cap the length so a large payload cannot blow out the row.
+  const text = parts.join(" · ");
+  return text.length > 220 ? `${text.slice(0, 217)}…` : text;
+}
+
 function fmtTime(ts) {
   if (!ts) return "—";
   try { return new Date(ts).toLocaleTimeString(); } catch { return ts; }
@@ -98,9 +150,9 @@ export default function Reports() {
         agent_id: selected,
         category: e.payload?.test_type || "live",
         phase: e.payload?.module ? "Assessment" : "System",
-        result: e.payload?.passed ? "PASS" : e.payload?.result === "BLOCKED_BY_EDR" ? "BLOCKED_BY_EDR" : "FAIL",
+        result: deriveResult(e.payload),
         title: e.payload?.module || e.type,
-        detail: e.payload?.detail || JSON.stringify(e.payload),
+        detail: humaniseDetail(e.payload),
         mitre: e.payload?.mitre || "N/A",
         artifacts: e.payload?.artifacts || [],
         timestamp: e.timestamp,
@@ -109,10 +161,12 @@ export default function Reports() {
     return findings;
   }, [state.events, selected]);
 
-  // Summary counts
-  const totalModules = moduleResults.length;
-  const passedModules = moduleResults.filter(e => e.payload?.passed).length;
-  const failedModules = totalModules - passedModules;
+  // Summary counts. Only real verdicts are counted: an INFO ack (a restart,
+  // a self-update) is not a module that was tested, so including it would
+  // inflate the total and post a phantom failure against the score.
+  const totalModules = moduleResults.filter(e => !NON_VERDICT_RESULTS.has(e.payload?.result)).length;
+  const passedModules = moduleResults.filter(e => isVerdictPass(deriveResult(e.payload))).length;
+  const failedModules = Math.max(0, totalModules - passedModules);
   const totalTampers = tamperEvents.length;
 
   // MITRE Calculation - use module results and tamper events
@@ -126,10 +180,12 @@ export default function Reports() {
       if (isPass) stats[tactic].passed += 1;
     };
     
-    // Use module results and tamper events for MITRE stats
+    // Use module results and tamper events for MITRE stats. Informational acks
+    // are skipped so they cannot register as a failed technique.
     moduleResults.forEach(m => {
-      const isPassed = m.payload?.passed || m.payload?.result === 'BLOCKED_BY_EDR';
-      addStat(m.payload?.mitre, isPassed);
+      const result = deriveResult(m.payload);
+      if (NON_VERDICT_RESULTS.has(result)) return;
+      addStat(m.payload?.mitre, isVerdictPass(result));
     });
     tamperEvents.forEach(e => {
       addStat(e.payload?.mitre, true); // tamper events are BLOCKED_BY_EDR = pass
@@ -421,15 +477,17 @@ export default function Reports() {
         <div className={styles.section}>
           <div className={styles.sectionTitle}>Assessment Modules</div>
           {moduleResults.map((e, i) => {
-            const isGap = !e.payload?.passed; // EDR Failed to block
+            const result = deriveResult(e.payload);
+            // An INFO ack is not a gap, so it must not render as one.
+            const isGap = !NON_VERDICT_RESULTS.has(result) && !isVerdictPass(result);
             const fid = `mod-${i}`;
             return (
               <div key={i} style={{ display: 'flex', flexDirection: 'column' }}>
                 <div className={styles.findingRow}>
-                  <div>{resultBadge(e.payload?.result || (e.payload?.passed ? "PASS" : "FAIL"), styles)}</div>
+                  <div>{resultBadge(result, styles)}</div>
                   <div style={{ flex: 1 }}>
                     <div className={styles.findingTitle}>{e.payload?.module}</div>
-                    <div className={styles.findingDetail}>{e.payload?.detail}</div>
+                    <div className={styles.findingDetail}>{humaniseDetail(e.payload)}</div>
                     {e.payload?.duration_ms && <div className={styles.mitre} style={{marginTop:2}}>Duration: {e.payload.duration_ms}ms</div>}
                     {e.payload?.artifacts?.length > 0 && (
                       <div className={styles.mitre} style={{ marginTop: 4 }}>
@@ -472,7 +530,10 @@ export default function Reports() {
       <div className={styles.section}>
         <div className={styles.sectionTitle}>Session Findings</div>
         {sessionFindings.filter(f => f.result !== "BLOCKED" && f.result !== "BLOCKED_BY_EDR").map(f => {
-          const isGap = f.result === "PASS"; // e.g. discovery succeeded (EDR missed it)
+          // Inverted on purpose, unlike module results. These are discovery findings:
+          // a PASS means the discovery itself succeeded, i.e. the EDR did NOT
+          // flag the activity — which is the gap worth remediating.
+          const isGap = f.result === "PASS";
           return (
             <div key={f.id} style={{ display: 'flex', flexDirection: 'column' }}>
               <div className={styles.findingRow}>
