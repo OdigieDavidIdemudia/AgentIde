@@ -1,4 +1,4 @@
-# AgentIde — EDR/XDR POC Assessment Framework
+﻿# AgentIde â€” EDR/XDR POC Assessment Framework
 
 AgentIde is a security assessment toolkit for evaluating EDR/XDR products on
 endpoints. A Go agent runs assessment modules (EICAR drop **and execution**
@@ -7,7 +7,7 @@ testing) and streams results to a central dashboard, which scores findings
 against MITRE ATT&CK techniques and can generate AI-assisted reports. Every
 file a module creates is reported back with its full path.
 
-> ⚠️ **Dual-use tooling.** The agent can attempt to stop security services,
+> âš ï¸ **Dual-use tooling.** The agent can attempt to stop security services,
 > terminate vendor processes, and delete vendor binaries. Only run it on
 > systems you own or have written authorization to test.
 
@@ -17,7 +17,7 @@ file a module creates is reported back with its full path.
 agent/          Go agent (Windows service / Linux daemon / CLI)
   core/         config, logger, scheduler
   discovery/    security-vendor fingerprinting
-  modules/      assessment modules (malware, antitamper, lolbin, …)
+  modules/      assessment modules (malware, antitamper, lolbin, â€¦)
   modes/        passive (command-driven) and active runners
   transport/    WebSocket client (auto-reconnect, event queue)
   disabler/     vendor disable/restore helpers
@@ -39,7 +39,7 @@ docker compose up -d          # agentide / agentide_password / agentide DB
 
 ```bash
 cp .env.example .env          # from the project root
-# Edit .env — at minimum set AGENT_TOKEN and ADMIN_PASSWORD
+# Edit .env â€” at minimum set AGENT_TOKEN and ADMIN_PASSWORD
 node -e "console.log(require('crypto').randomUUID())"   # generate an agent token
 ```
 
@@ -73,7 +73,7 @@ go build -o agentide.exe .
 ```
 
 `-check` connects once and exits `0` if the dashboard is reachable **and**
-accepts the token, or `1` otherwise — run it before/after installing to catch a
+accepts the token, or `1` otherwise â€” run it before/after installing to catch a
 wrong address or token immediately.
 
 `-dashboard` accepts a **comma-separated list** of addresses; the agent tries
@@ -90,21 +90,34 @@ CLI flags: `-install/-uninstall`, `-check`, `-mode passive|active`, `-profile
 rapid|apt|baseline`, `-days N`, `-module <name>`, `-dashboard <url[,url]>`,
 `-token <secret>`, `-cert-pin <hex>`, `-allow-reboot`.
 
+**Profile controls pacing, not module selection.** These are easy to conflate:
+
+| Profile | Behaviour |
+|---|---|
+| `rapid` | All selected modules run back-to-back (default) |
+| `apt` | Modules spread across `-days N` with ±20% jitter, to avoid a predictable pattern |
+| `baseline` | **Runs no attack modules at all** — monitoring only |
+
+Which modules run is decided separately by `-module <name>` (or `all`, the
+default). `baseline` is the one to watch: combined with the default module set
+it produces an empty run, because it deliberately suppresses every attack
+module. Pair it with an explicit `-module` if you want any technique to fire.
+
 Prebuilt installers (both verify connectivity before reporting success):
 
-- `agent/msi_output/AgentIDE_<version>.msi` — silent MSI. An interactive (GUI)
+- `agent/msi_output/AgentIDE_<version>.msi` â€” silent MSI. An interactive (GUI)
   install prompts for the dashboard URL, token and optional cert pin:
   ```powershell
-  msiexec /i AgentIDE_0.4.5.msi /qn DASHBOARD="wss://192.168.1.168:8443" TOKEN="<AGENT_TOKEN>"
+  msiexec /i AgentIDE_0.4.6.msi /qn DASHBOARD="wss://192.168.1.168:8443" TOKEN="<AGENT_TOKEN>"
   ```
   After registering the service the MSI runs `agentide.exe -check` as SYSTEM
   and records the outcome in the MSI log, so an unreachable dashboard or a
   rejected token is visible instead of producing a silent no-op install. Pass
   `VALIDATE=0` to skip it (offline/deployment images).
-- `agent/msi_output/AgentIDE_Installer_v<version>.exe` — interactive wizard with a
+- `agent/msi_output/AgentIDE_Installer_v<version>.exe` â€” interactive wizard with a
   visible connectivity check, also supporting silent mode:
   ```powershell
-  AgentIDE_Installer_v0.4.5.exe /VERYSILENT /DASHBOARDURL="wss://192.168.1.168:8443" /AGENTTOKEN="<AGENT_TOKEN>"
+  AgentIDE_Installer_v0.4.6.exe /VERYSILENT /DASHBOARDURL="wss://192.168.1.168:8443" /AGENTTOKEN="<AGENT_TOKEN>"
   ```
 
 Both are produced from `version.json` by `build_pro.bat`, so the agent binary
@@ -115,8 +128,8 @@ and the installers cannot drift apart.
 Agents **auto-update** from the dashboard. On connect they send their version;
 if the dashboard has a newer build it replies with an `update_agent` command, and
 the agent downloads it, verifies the SHA-256, and swaps its own executable via a
-detached helper (pause guardian → stop service → replace → restart). Updates can
-also be pushed per agent from **Agent Management → Update**. The guardian is
+detached helper (pause guardian â†’ stop service â†’ replace â†’ restart). Updates can
+also be pushed per agent from **Agent Management â†’ Update**. The guardian is
 paused via an update lock during the swap so it never restores the old binary.
 
 The dashboard serves whatever build is in `agent/` (`agentide.exe` +
@@ -126,18 +139,18 @@ build from another directory.
 
 > Note: self-update requires an agent built from v0.3.0 or later (the first
 > release with the `update_agent` command). Agents older than that need a
-> one-time reinstall of the current build (`0.4.5`); from v0.3.0 onward the
+> one-time reinstall of the current build (`0.4.6`); from v0.3.0 onward the
 > agent keeps itself up to date.
 >
 > To publish a new version: bump `agent/version.json` and rebuild both the agent
 > binary and the installers with `build_pro.bat`. Publishing is therefore a
-> single-version operation — never bump `version.json` without rebuilding, or
+> single-version operation â€” never bump `version.json` without rebuilding, or
 > the dashboard will serve a version string that does not match the binary.
 
 
 ## Security model
 
-- **Agents** authenticate to `wss://…/agent`. On first connect they
+- **Agents** authenticate to `wss://â€¦/agent`. On first connect they
   present the shared `AGENT_TOKEN`; the dashboard then issues a
   **per-agent token** bound to that hostname (stored in the DB and
   persisted to the agent's `config.json`), and subsequent connects
@@ -146,7 +159,7 @@ build from another directory.
   `ADMIN_EMAIL`/`ADMIN_PASSWORD`, rate-limited to 5 failures per
   15 minutes per IP), receive a 24h session token, and present
   it as a Bearer header on REST calls and a query param on the
-  `wss://…/dashboard` socket, which also enforces an Origin check.
+  `wss://â€¦/dashboard` socket, which also enforces an Origin check.
   The frontend detects expiry (401) and returns to the login page.
 - CORS is same-origin by default; widen with `CORS_ORIGINS`.
 - TLS is self-signed in dev (`npm run cert:generate`); the agent
@@ -156,13 +169,13 @@ build from another directory.
 - **Re-enable watchdog:** whenever a vendor is disabled for an assessment,
   the agent spawns a detached watchdog process. If the agent is killed or
   hangs mid-assessment (which is what several EDRs do), the watchdog
-  re-enables the vendor automatically — heartbeat timeout 90s, absolute
+  re-enables the vendor automatically â€” heartbeat timeout 90s, absolute
   deadline = assessment duration + 1h. On normal completion the watchdog
   is disarmed quietly.
 - **Service self-protection:** the installed Windows service is deliberately
   hard to stop or uninstall, so a SYSTEM-level EDR (for example Cortex XDR)
   cannot disable it:
-  - **Locked DACL** — the service descriptor denies `SERVICE_STOP`,
+  - **Locked DACL** â€” the service descriptor denies `SERVICE_STOP`,
     `SERVICE_CHANGE_CONFIG`, and `DELETE` to `NT AUTHORITY\SYSTEM`, and grants
     only query/start to other accounts. Administrators retain full control.
   - **Aggressive recovery:** the SCM restarts the service after 1s/2s/5s/15s,
@@ -183,7 +196,7 @@ build from another directory.
 > Note: this raises the bar for a **user-mode** actor calling the SCM. A
 > kernel-mode EDR driver can still terminate any user-mode process; that is
 > what the service recovery actions, guardian service and scheduled task are
-> for — the agent comes back automatically.
+> for â€” the agent comes back automatically.
 
 ## Remote agent management
 
@@ -192,15 +205,15 @@ endpoint. In **Fleet View**, right-clicking an agent row opens a context menu
 (position-clamped to the viewport, dismisses on Escape / outside click / scroll
 / resize):
 
-- **Restart agent** — issues a `restart_agent` command. See the note below.
-- **Uninstall agent** — issues an `uninstall_agent` command, which removes the
+- **Restart agent** â€” issues a `restart_agent` command. See the note below.
+- **Uninstall agent** â€” issues an `uninstall_agent` command, which removes the
   guardian service and scheduled tasks first, then the main service.
-- **Update agent** — pushes the current build (see *Agent self-update*).
+- **Update agent** â€” pushes the current build (see *Agent self-update*).
 - **Start / stop assessment**.
 
 > **Why restart is not just "stop and start".** The hardened service descriptor
-> denies `SERVICE_STOP` to SYSTEM — that is what stops an EDR from disabling the
-> agent — but it means the agent cannot stop *itself*, because SYSTEM is the
+> denies `SERVICE_STOP` to SYSTEM â€” that is what stops an EDR from disabling the
+> agent â€” but it means the agent cannot stop *itself*, because SYSTEM is the
 > caller. The guardian re-applies the hardened descriptor every 15s, so briefly
 > widening it isn't enough either.
 >
@@ -217,8 +230,8 @@ endpoint. In **Fleet View**, right-clicking an agent row opens a context menu
 ## Assessment lifecycle
 
 The dashboard tracks the full loop: `POST /api/assessments` creates a
-`running` row → the agent streams `module_result` events (persisted to the
-`results` table and linked via `session_id`) → `assessment_done` marks the
+`running` row â†’ the agent streams `module_result` events (persisted to the
+`results` table and linked via `session_id`) â†’ `assessment_done` marks the
 assessment `completed` with pass/fail counts and a score. Raw telemetry in
 the `events` table is pruned after `EVENT_RETENTION_DAYS` (default 30).
 
@@ -240,8 +253,8 @@ the `events` table is pruned after `EVENT_RETENTION_DAYS` (default 30).
 The dashboard prints the exact URL(s) to use at startup, for example:
 
 ```
-🛡️  Agent must connect to the dashboard host, NOT localhost.
-      (preferred — survives IP changes)  agentide.exe -install -dashboard wss://MY-DASHBOARD-HOST:8443 -token <AGENT_TOKEN>
+ðŸ›¡ï¸  Agent must connect to the dashboard host, NOT localhost.
+      (preferred â€” survives IP changes)  agentide.exe -install -dashboard wss://MY-DASHBOARD-HOST:8443 -token <AGENT_TOKEN>
       or by IP (pick the one the agent can reach):
       agentide.exe -install -dashboard wss://192.168.1.168:8443 -token <AGENT_TOKEN>
 ```
@@ -249,7 +262,7 @@ The dashboard prints the exact URL(s) to use at startup, for example:
 > **Dynamic IP / bridged VM:** if the dashboard host's IP changes (roaming
 > Wi-Fi, or a VM bridged to the host's Wi-Fi that jumps between `192.168.1.x`
 > and `192.168.0.x`), point the agent at the host's **hostname** instead of an
-> IP — it re-resolves on every connect, so it survives the change:
+> IP â€” it re-resolves on every connect, so it survives the change:
 > `-dashboard wss://MY-DASHBOARD-HOST:8443`. Verify from the agent host with
 > `curl -k https://MY-DASHBOARD-HOST:8443/healthz`.
 
@@ -259,10 +272,10 @@ Work through this checklist:
    server, `Get-NetTCPConnection -LocalPort 8443 -State Listen` should show a
    listener.
 2. **Use the LAN IP, not `localhost`.** The agent must dial the dashboard
-   host's reachable IP — `localhost`/`127.0.0.1` resolve to the agent itself.
+   host's reachable IP â€” `localhost`/`127.0.0.1` resolve to the agent itself.
 3. **Reachability.** From the agent host:
-   - `Test-NetConnection <dashboard-ip> -Port 8443` → `TcpTestSucceeded: True`
-   - `curl -k https://<dashboard-ip>:8443/healthz` → `{"status":"ok",...}`
+   - `Test-NetConnection <dashboard-ip> -Port 8443` â†’ `TcpTestSucceeded: True`
+   - `curl -k https://<dashboard-ip>:8443/healthz` â†’ `{"status":"ok",...}`
 
    If either fails, allow inbound TCP `8443` in Windows Firewall on the
    dashboard host.
@@ -272,7 +285,7 @@ Work through this checklist:
 5. **Check the agent log:** `C:\ProgramData\AgentIde\agentide.log` (service) or
    `%TEMP%\agentide.log`. `Transport: connected to dashboard` means the socket
    is up; failures log the attempted URL and backoff.
-6. **Force a re-point.** Re-run this on the agent host with the correct URL — it
+6. **Force a re-point.** Re-run this on the agent host with the correct URL â€” it
    rewrites `config.json` next to the exe and restarts the service:
    `agentide.exe -install -dashboard wss://<dashboard-ip>:8443 -token <AGENT_TOKEN>`
 
@@ -286,16 +299,16 @@ scripts\verify.bat          # Windows
 
 It runs, in order:
 
-1. `go vet ./...` — shadowed errors, bad printf verbs, unreachable code
+1. `go vet ./...` â€” shadowed errors, bad printf verbs, unreachable code
 2. `go build ./...` with `GOOS=windows`
 3. `go build ./...` with `GOOS=linux`
-4. `go test ./...` — watchdog, service, state, modules
+4. `go test ./...` â€” watchdog, service, state, modules
 5. `go test -race ./...`
 
 Steps 2 and 3 exist because `modules/helpers_windows.go` and
 `modules/helpers_linux.go` implement the same surface for two platforms. A
 change that only compiles on the host OS otherwise looks green locally while
-breaking the other target — the cross-compile is what catches that.
+breaking the other target â€” the cross-compile is what catches that.
 
 Step 5 requires cgo and is **skipped with a warning** when no C compiler is on
 PATH, rather than failing the run. On this machine it does skip: the watchdog,
@@ -316,7 +329,7 @@ cd dashboard && npm run build      # frontend production build
 ```
 
 > `dashboard` `npm test` runs `node --test "server/**/*.test.js"`. Do **not**
-> change this back to `node --test server/` — that form executes every `.js`
+> change this back to `node --test server/` â€” that form executes every `.js`
 > file in the directory, which imports `server/index.js` and starts the real
 > dashboard: it binds `:8443`, opens the WebSocket hub, and connects to
 > Postgres, then never exits. The glob keeps it to actual test files.
