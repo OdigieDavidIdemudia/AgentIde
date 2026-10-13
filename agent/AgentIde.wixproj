@@ -1,10 +1,18 @@
 <Project Sdk="WixToolset.Sdk/6.0.0">
 
+  <ItemGroup>
+    <!-- Standard WixUI dialog set (Welcome, License, VerifyReady, Cancel, ...).
+         The custom Dashboard/Verify dialogs graft onto these. -->
+    <PackageReference Include="WixToolset.UI.wixext" Version="6.0.0" />
+  </ItemGroup>
+
   <PropertyGroup>
     <!-- Build a 64-bit package (ProgramFiles64Folder, x64 components). -->
     <InstallerPlatform>x64</InstallerPlatform>
-    <!-- MSI is emitted as msi_output\AgentIDE_0.4.0.msi -->
-    <OutputName>AgentIDE_0.4.0</OutputName>
+    <!-- MSI is emitted as msi_output\AgentIDE_<version>.msi. The version is
+         passed in by build_msi.bat, which reads it from version.json, so the
+         package name always matches product.wxs. -->
+    <OutputName>AgentIDE_$(Version)</OutputName>
     <OutputPath>msi_output\</OutputPath>
   </PropertyGroup>
 

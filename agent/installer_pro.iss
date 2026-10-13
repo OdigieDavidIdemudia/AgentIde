@@ -8,27 +8,37 @@
 ; The dashboard URL may be a comma-separated list of addresses to try in order,
 ; e.g. /DASHBOARDURL="wss://10.0.0.5:8443,wss://192.168.1.168:8443"
 
+; AppVersion is supplied by build_pro.bat as /DAppVersion=<x.y.z>, read from
+; version.json — the same source the agent binary and MSI use. That keeps the
+; three installers from drifting apart, which previously let a v0.1.0 setup
+; binary ship alongside a v0.4.0 agent.
+#ifndef AppVersion
+  #error AppVersion is not defined - build via build_pro.bat (or pass /DAppVersion=x.y.z)
+#endif
+
 [Setup]
 AppName=AgentIDE
-AppVersion=0.4.0
+; Version comes from version.json (via /DAppVersion passed by build_pro.bat) so
+; the Inno installer can never drift from the agent binary or the MSI.
+AppVersion={#AppVersion}
 AppPublisher=AgentIDE Project
 DefaultDirName={commonpf}\AgentIDE
 DefaultGroupName=AgentIDE
 OutputDir=msi_output
-OutputBaseFilename=AgentIDE_Installer_v0.4.0
+OutputBaseFilename=AgentIDE_Installer_v{#AppVersion}
 Compression=lzma2/ultra64
 SolidCompression=yes
 PrivilegesRequired=admin
-ArchitecturesInstallIn64BitMode=x64
-ArchitecturesAllowed=x64
+ArchitecturesInstallIn64BitMode=x64compatible
+ArchitecturesAllowed=x64compatible
 DisableProgramGroupPage=yes
 AlwaysRestart=no
 RestartIfNeededByRun=no
 WizardStyle=modern
 UninstallDisplayIcon={app}\agentide.exe
-UninstallDisplayName=AgentIDE 0.4.0
+UninstallDisplayName=AgentIDE {#AppVersion}
 AppCopyright=Copyright (C) 2024 AgentIDE Project
-AppVerName=AgentIDE 0.4.0
+AppVerName=AgentIDE {#AppVersion}
 
 [Files]
 Source: "agentide.exe"; DestDir: "{app}"; Flags: ignoreversion

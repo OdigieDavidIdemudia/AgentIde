@@ -34,6 +34,11 @@ func (m *performanceModule) Run() RawResult {
 	m.logger.Info("Performance: sampling started", map[string]interface{}{"samples": 6, "interval_s": 10})
 	start := time.Now()
 
+	// Reset the sample buffer so a second run in the same process measures only
+	// this run. Without this, summarise() averaged the accumulated history and
+	// a re-run inherited the previous assessment's numbers.
+	m.samples = nil
+
 	for i := 0; i < 6; i++ {
 		sample, err := collectSample()
 		if err != nil {
@@ -53,7 +58,15 @@ func (m *performanceModule) Run() RawResult {
 
 	avgCPU, peakRAM := summarise(m.samples)
 	result.ElapsedMs = time.Since(start).Milliseconds()
-	result.Notes = fmt.Sprintf("Avg CPU: %.1f%% | Peak RAM: %.0f MB | GOOS: %s", avgCPU, peakRAM, runtime.GOOS)
+	// Be explicit that these are whole-system figures sampled while the vendor
+	// agent is running, not per-process CPU attributed to the vendor. Treating
+	// system-wide CPU as "EDR overhead" is a measurement error that inflates
+	// the vendor's apparent resource cost.
+	result.Notes = fmt.Sprintf(
+		"Whole-system CPU avg %.1f%% / peak RAM %.0f MB over %d samples (GOOS: %s). "+
+			"These are host-wide totals, NOT attributed to the vendor process — "+
+			"use baseline comparison to judge impact",
+		avgCPU, peakRAM, len(m.samples), runtime.GOOS)
 	m.logger.Info("Performance: sampling complete", map[string]interface{}{
 		"avg_cpu_pct": avgCPU,
 		"peak_ram_mb": peakRAM,

@@ -13,10 +13,22 @@
   config.json) is applied exactly as it is for a manual install, in one code path.
 
   Silent install:
-    msiexec /i msi_output\AgentIDE_0.4.0.msi /qn DASHBOARD=wss://host:8080 TOKEN=<AGENT_TOKEN> [CERTPIN=<hex>]
+    msiexec /i msi_output\AgentIDE_0.4.3.msi /qn DASHBOARD=wss://host:8443 TOKEN=<AGENT_TOKEN> [CERTPIN=<hex>]
 
   Silent uninstall:
-    msiexec /x msi_output\AgentIDE_0.4.0.msi /qn
+    msiexec /x msi_output\AgentIDE_0.4.3.msi /qn
+
+  Interactive install (double-click) prompts for the dashboard URL, token and
+  optional certificate pin, so a GUI install cannot silently produce an agent
+  that reports to nothing.
+
+  Post-install validation: the installer runs `agentide.exe -check` as SYSTEM
+  after registering the service and records the result in the MSI log, so a
+  dashboard that is unreachable or a token that is rejected is visible instead
+  of producing a silent no-op install. Pass VALIDATE=0 to skip the check
+  (useful for offline/deployment images where the dashboard is not yet
+  reachable). It never fails the install — a transient network problem should
+  not force a rollback of a working service registration.
 
   Note: TOKEN appears on the command line; it is also passed to a deferred
   custom action marked HideTarget so it is not written to MSI logs.
@@ -25,7 +37,7 @@
   <Package Id="AgentIde.AssessmentAgent"
            Name="AgentIde Assessment Agent"
            Manufacturer="AgentIde Project"
-           Version="0.4.0"
+           Version="0.4.5"
            UpgradeCode="{9D4E1F3B-6C2A-4B7E-9F1D-3A5C8E2B7D64}"
            Scope="perMachine"
            InstallerVersion="500"
@@ -43,6 +55,20 @@
     <Property Id="TOKEN" Secure="yes" />
     <Property Id="CERTPIN" Secure="yes" />
     <Property Id="REBOOT" Value="ReallySuppress" />
+
+    <!--
+      Post-install verification. The agent's own install-flag custom action
+      checks connectivity internally, but it writes to a hidden console, so an
+      unreachable dashboard produces a silent no-op install: exit 0, service
+      registered, agent reporting to nothing.
+
+      These actions run agentide.exe -check after installation and surface the
+      result to the operator. -check exits 0 only when the WebSocket is up AND
+      the token is accepted, which is exactly the condition that matters.
+
+      Set VALIDATE=0 to skip (useful for offline/deployment images).
+    -->
+    <Property Id="VALIDATE" Value="1" />
 
     <!-- Launch conditions: 64-bit Windows, elevated install. -->
     <Launch Condition="VersionNT64" Message="AgentIde requires 64-bit Windows 10 or later." />
@@ -80,6 +106,28 @@
                   HideTarget="yes"
                   Return="check" />
 
+    <!--
+      Post-install validation. Runs agentide.exe with the -check flag as SYSTEM
+      after the service is registered. A type 18 action (FileRef + ExeCommand)
+      runs the installed binary directly, so no custom-action DLL is needed.
+      The exit code (0 = socket up AND token accepted) is captured by
+      CheckResultCA and shown on the completion dialog, so an install that
+      could not reach the dashboard can never look successful.
+    -->
+    <CustomAction Id="SetCheckCAData"
+                  Property="CustomActionData"
+                  Value="-check -dashboard &quot;[DASHBOARD]&quot; -token &quot;[TOKEN]&quot;"
+                  Execute="immediate"
+                  Return="check" />
+
+    <CustomAction Id="CheckCA"
+                  FileRef="AgentExe"
+                  ExeCommand="[CustomActionData]"
+                  Execute="deferred"
+                  Impersonate="no"
+                  HideTarget="yes"
+                  Return="ignore" />
+
     <!-- If installation fails after service registration, roll it back. -->
     <CustomAction Id="InstallRollbackCA"
                   FileRef="AgentExe"
@@ -101,12 +149,66 @@
     <InstallExecuteSequence>
       <Custom Action="SetInstallCAData" After="InstallInitialize" Condition="NOT Installed" />
       <Custom Action="InstallCA" After="InstallFiles" Condition="NOT Installed" />
+
+      <!--
+        Connectivity verification. Skipped when VALIDATE=0 or when no dashboard
+        was supplied (a local-only install). A failed check warns but does NOT
+        fail the install, matching the Inno installer: a transient network
+        problem should not force the operator to roll back a working service
+        registration. The agent's own install action already attempts a
+        connection; this makes the result visible instead of writing it to a
+        hidden console.
+      -->
+      <Custom Action="SetCheckCAData" After="InstallCA" Condition="NOT Installed AND VALIDATE=&quot;1&quot; AND DASHBOARD" />
+      <Custom Action="CheckCA" After="SetCheckCAData" Condition="NOT Installed AND VALIDATE=&quot;1&quot; AND DASHBOARD" />
+
       <Custom Action="InstallRollbackCA" After="InstallCA" Condition="NOT Installed" />
       <Custom Action="UninstallCA" Before="RemoveFiles" Condition="Installed AND REMOVE~=&quot;ALL&quot;" />
     </InstallExecuteSequence>
   </Package>
 
   <Fragment>
+    <!--
+      WixUI_InstallDir supplies the standard dialog sequence. The custom pages
+      are chained onto it purely with Publish events (no InstallUISequence
+      override, which would replace the WixUI sequence and drop InstallFinalize).
+    -->
+    <UI Id="AgentUI">
+      <!-- WixUI_InstallDir supplies the standard dialog set (Welcome, License,
+           VerifyReady, Cancel, ...) that the custom Dashboard/Verify dialogs
+           graft onto. -->
+      <WixUI Id="WixUI_InstallDir" xmlns="http://wixtoolset.org/schemas/v4/wxs/ui" />
+      <!--
+        Interactive installs ask for the dashboard details the agent needs.
+        Without them the MSI would install a service that reports to nothing.
+      -->
+      <Dialog Id="DashboardDlg" Width="370" Height="270" Title="AgentIde — Dashboard connection">
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="340" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}Dashboard connection" />
+        <Control Id="Description" Type="Text" X="25" Y="26" Width="320" Height="30" Transparent="yes" NoPrefix="yes" Text="Where should this agent report? Enter the dashboard address and the AGENT_TOKEN from the dashboard .env file." />
+        <Control Id="DashboardLabel" Type="Text" X="25" Y="62" Width="90" Height="10" Text="Dashboard URL:" />
+        <Control Id="DashboardEdit" Type="Edit" Property="DASHBOARD" X="120" Y="60" Width="220" Height="18" />
+        <Control Id="TokenLabel" Type="Text" X="25" Y="92" Width="90" Height="10" Text="Agent token:" />
+        <Control Id="TokenEdit" Type="Edit" Property="TOKEN" X="120" Y="90" Width="220" Height="18" />
+        <Control Id="CertPinLabel" Type="Text" X="25" Y="122" Width="90" Height="10" Text="Cert pin (optional):" />
+        <Control Id="CertPinEdit" Type="Edit" Property="CERTPIN" X="120" Y="120" Width="220" Height="18" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="Back">
+          <Publish Event="NewDialog" Value="LicenseAgreementDlg" />
+        </Control>
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="Next">
+          <Publish Event="NewDialog" Value="VerifyReadyDlg" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancel">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+        <!--
+        Chain the Dashboard page into the WixUI flow: License -> Dashboard ->
+        VerifyReady -> Install. Dashboard's Back returns to the license page.
+      -->
+      <Publish Dialog="LicenseAgreementDlg" Control="Next" Event="NewDialog" Value="DashboardDlg" Order="3" />
+      <Publish Dialog="LicenseAgreementDlg" Control="Back" Event="NewDialog" Value="DashboardDlg" Order="3" />
+    </UI>
+
     <ComponentGroup Id="ProductComponents" Directory="INSTALLDIR">
       <Component Id="AgentBinary">
         <File Id="AgentExe" Source="agentide.exe" />

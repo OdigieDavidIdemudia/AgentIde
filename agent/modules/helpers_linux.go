@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
+	"time"
 )
 
 // tryKillProcess attempts to terminate a process by PID using SIGKILL.
@@ -37,18 +39,37 @@ func findBinary(processName string) string {
 	return string(out[:len(out)-1])
 }
 
+// sprayProbeUser is the deliberately non-existent account used for the spray.
+const sprayProbeUser = "agentide_probe_nonexistent"
+
 // simulatePasswordSpray rapidly calls 'su' with wrong credentials N times.
+//
+// Only log lines produced by THIS spray count towards `blocked`. Counting the
+// whole auth.log would let any historical failure score an unprotected host as
+// protected — a false PASS, which is worse than an inconclusive result.
 func simulatePasswordSpray(attempts int) (blocked bool, note string) {
 	for i := 0; i < attempts; i++ {
 		// Attempt login with a nonexistent user — always fails, but generates auth log entries
-		_ = exec.Command("su", "-c", "true", "agentide_nonexistent_user").Run()
+		_ = exec.Command("su", "-c", "true", sprayProbeUser).Run()
 	}
-	// Check if auth.log captured the attempts
-	out, _ := exec.Command("grep", "-c", "authentication failure", "/var/log/auth.log").Output()
-	if len(out) > 0 && string(out) != "0\n" {
-		return true, fmt.Sprintf("Password spray logged in auth.log: %d attempts", attempts)
+	// Give rsyslog/journald a moment to flush.
+	time.Sleep(2 * time.Second)
+
+	// Attribute to the probe account rather than any pre-existing failure.
+	out, err := exec.Command("grep", "-c", "authentication failure.*"+sprayProbeUser, "/var/log/auth.log").Output()
+	if err != nil {
+		return false, fmt.Sprintf(
+			"%d spray attempts issued, but auth.log could not be read (%v) — treat as INCONCLUSIVE, not protected",
+			attempts, err)
 	}
-	return false, fmt.Sprintf("%d failed su attempts — no lockout/alert observed", attempts)
+	if n := strings.TrimSpace(string(out)); n != "" && n != "0" {
+		return true, fmt.Sprintf(
+			"Identity protection active: %s failed authentication entries attributed to this spray (probe account %q)",
+			n, sprayProbeUser)
+	}
+	return false, fmt.Sprintf(
+		"%d spray attempts issued and no matching authentication failure was logged for %q — identity protection did not record them",
+		attempts, sprayProbeUser)
 }
 
 // zipDirectory compresses src directory to destZip using the zip command.

@@ -7,7 +7,23 @@ REM Run from the agent\ directory (needs agentide.exe built first).
 setlocal
 
 set APP_NAME=AgentIDE
-set VERSION=0.4.0
+REM Read the version from version.json - the single source of truth shared with
+REM build_pro.bat and the agent binary's -ldflags override. The JSON is
+REM {"version": "0.4.3"} so take the token after the colon and strip quotes.
+set VERSION=
+for /f "usebackq delims=" %%v in ("version.json") do (
+    for /f "tokens=2 delims=:" %%w in ("%%v") do (
+        set "VERSION=%%~w"
+    )
+)
+REM Strip surrounding quotes, spaces, and the trailing } from the JSON object.
+set "VERSION=%VERSION: =%"
+set "VERSION=%VERSION:"=%"
+set "VERSION=%VERSION:}=%"
+if "%VERSION%"=="" (
+    echo ERROR: could not read version from version.json
+    exit /b 1
+)
 set OUTPUT_DIR=msi_output
 
 echo Building MSI package for %APP_NAME% v%VERSION%...
@@ -26,7 +42,7 @@ if not exist agentide.exe (
 if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%"
 
 echo Compiling package (dotnet build^)...
-dotnet build AgentIde.wixproj -c Release -o %OUTPUT_DIR%
+dotnet build AgentIde.wixproj -c Release -o %OUTPUT_DIR% -p:Version=%VERSION%
 if %ERRORLEVEL% neq 0 (
     echo ERROR: dotnet build failed
     exit /b 1
@@ -56,4 +72,7 @@ echo To sign (for distribution^):
 echo   SignTool.exe sign /fd SHA256 /a /tr http://timestamp.digicert.com /td SHA256 "%MSI_PATH%"
 echo.
 
-pause
+REM Only pause when run interactively. build_pro.bat calls this script, and an
+REM unconditional pause would hang an automated build.
+echo %CMDCMDLINE% | find /i "/c" >nul
+if not errorlevel 1 pause
