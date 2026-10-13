@@ -386,7 +386,8 @@ You must generate a professional report that strictly follows the GTCO Standalon
 
 Requirements:
 - Include an "Introduction" and "Scope of Assessment" section.
-- Scope of Assessment must include: test types (rapid/apt/baseline), test types (blackbox/whitebox/deployment), modules tested, target EDR vendor, date range.
+- Scope of Assessment must include: the profile, the test type, the modules actually tested, the target EDR vendor, and the start/finish timestamps.
+- CRITICAL: report ONLY what is present in the JSON below. If a field is null or empty (for example target_vendors is empty because no vendor was detected), state plainly that it was not recorded or not detected. NEVER infer, guess, or substitute a plausible vendor, module list, or profile. A fabricated scope makes the whole report unreliable.
 - For each finding (especially FAILED tests), structure it exactly as:
   <h3>[Index]. [Module Name: Action] - [SEVERITY]</h3>
   (Severity should be CRITICAL or HIGH for fails, colored red. LOW for passes, colored green).

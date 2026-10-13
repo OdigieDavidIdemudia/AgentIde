@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAgentContext } from '../../context/AgentContext.jsx';
-import { apiFetch } from '../../api.js';
+import { apiFetch, apiUrl } from '../../api.js';
 import { useNavigate } from 'react-router-dom';
 import styles from './FleetView.module.css';
 import { EmptyState, ConfirmModal } from '../../components/ui.jsx';
@@ -40,7 +40,7 @@ export default function FleetView() {
     setActionStatus((prev) => ({ ...prev, [hostname]: `${command}...` }));
     try {
       const res = await apiFetch(
-        `https://${window.location.host}/api/agents/${hostname}/${command}`,
+        apiUrl(`/api/agents/${hostname}/${command}`),
         { method: 'POST' }
       );
       if (res.ok) {
@@ -61,7 +61,7 @@ export default function FleetView() {
 
   const viewConfig = async (hostname) => {
     try {
-      const res = await apiFetch(`https://${window.location.host}/api/agents/${hostname}/config`);
+      const res = await apiFetch(apiUrl(`/api/agents/${hostname}/config`));
       if (res.ok) {
         setConfigAgent({ hostname, config: await res.json() });
       } else {
@@ -93,7 +93,7 @@ export default function FleetView() {
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await apiFetch(`https://${window.location.host}/api/agent/version`);
+        const res = await apiFetch(apiUrl('/api/agent/version'));
         if (!res.ok) return;
         const data = await res.json();
         if (!cancelled && data && data.version) setLatestVersion(data.version);
@@ -111,7 +111,7 @@ export default function FleetView() {
     setPendingDelete(null);
     if (!hostname) return;
     try {
-      const res = await apiFetch(`https://${window.location.host}/api/agents/${hostname}`, {
+      const res = await apiFetch(apiUrl(`/api/agents/${hostname}`), {
         method: 'DELETE'
       });
       if (res.ok) {

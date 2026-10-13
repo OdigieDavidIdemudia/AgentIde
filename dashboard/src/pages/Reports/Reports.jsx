@@ -280,30 +280,60 @@ export default function Reports() {
     
     const testTypes = [...new Set(allAssessments.map(a => a.test_type).filter(Boolean))];
     const profiles = [...new Set(allAssessments.map(a => a.profile).filter(Boolean))];
-    const modules = [...new Set(moduleResults.map(e => e.payload?.module).filter(Boolean))];
+    // Modules actually executed in this run, taken from the persisted results.
+    const executedModules = [...new Set(runResults.map(r => r.module_name).filter(Boolean))];
     const vendors = [...new Set(state.events.filter(e => e.agent_id === selected && e.payload?.vendor).map(e => e.payload.vendor))];
-    const dateRange = allAssessments.length > 0 ? {
-      first: allAssessments[0]?.timestamp,
-      last: allAssessments[allAssessments.length - 1]?.timestamp
-    } : null;
+    const dateRange = activeRun?.started_at
+      ? { first: activeRun.started_at, last: activeRun.completed_at || activeRun.started_at }
+      : null;
 
     return {
       agent: selected,
+      assessment_id: activeRunId,
       exported_at: new Date().toISOString(),
+      // Scope is reported from what the run actually did. It previously fell
+      // back to hardcoded values ('Microsoft Defender', all 8 modules) when
+      // the data was missing, so an export could describe an assessment that
+      // never happened - and those invented values were fed straight into the
+      // AI report prompt. Unknown is now reported as unknown.
       scope: {
-        test_types: testTypes.length > 0 ? testTypes : ['blackbox'],
-        profiles: profiles.length > 0 ? profiles : ['rapid'],
-        modules_tested: modules.length > 0 ? modules : ['malware','lolbin','network','identity','antitamper','reboot','falsepositive','performance'],
-        target_vendors: vendors.length > 0 ? vendors : ['Microsoft Defender'],
-        date_range: dateRange,
-        total_assessments: allAssessments.length
+        profile: activeRun?.profile ?? null,
+        test_types: activeRun?.test_type ? [activeRun.test_type] : [],
+        modules_requested: Array.isArray(activeRun?.modules) ? activeRun.modules : [],
+        modules_tested: executedModules,
+        target_vendors: vendors,
+        vendor_detected: vendors.length > 0 ? vendors[0] : null,
+        started_at: activeRun?.started_at ?? null,
+        completed_at: activeRun?.completed_at ?? null,
+        status: activeRun?.status ?? null,
+        score: activeRun?.score != null ? Math.round(activeRun.score) : null,
       },
-      summary: { totalModules, passedModules, failedModules, totalTampers },
+      summary: {
+        totalModules,
+        passedModules,
+        failedModules,
+        totalTampers,
+        score: activeRun?.score != null ? Math.round(activeRun.score) : null,
+      },
       deployment_integrity: [
         ...sessionFindings.filter(f => f.result === 'BLOCKED' || f.result === 'BLOCKED_BY_EDR'),
         ...tamperEvents.map(e => ({ ...e.payload, timestamp: e.timestamp, result: 'AGENT_RECOVERED' }))
       ],
-      module_results: moduleResults.map(e => ({ ...e.payload, timestamp: e.timestamp })),
+      // Persisted results, not the volatile live-event buffer. Exporting from
+      // live events meant a page reload produced an empty module_results for a
+      // run whose results were visible on screen.
+      module_results: runResults.map(r => ({
+        module: r.module_name,
+        result: r.action,
+        passed: r.passed,
+        detail: r.detail,
+        mitre: r.mitre,
+        duration_ms: r.elapsed_ms,
+        test_type: r.test_type,
+        notes: r.notes,
+        artifacts: r.artifacts,
+        timestamp: r.recorded_at,
+      })),
       session_findings: sessionFindings.filter(f => f.result !== 'BLOCKED' && f.result !== 'BLOCKED_BY_EDR'),
     };
   };
@@ -649,7 +679,7 @@ export default function Reports() {
                     {typeBadge(r.test_type, styles)}
                     {isGap && !remediations[fid] && (
                       <button 
-                        onClick={() => handleGenerateRemediation(fid, { module: e.payload?.module, detail: e.payload?.detail, mitre: e.payload?.mitre })}
+                        onClick={() => handleGenerateRemediation(fid, { module: r.module_name, detail: r.detail, mitre: r.mitre })}
                         disabled={loadingRemediation[fid]}
                         style={{ marginTop: 4, background: 'var(--accent)', border: 'none', color: '#fff', padding: '4px 8px', borderRadius: '4px', cursor: loadingRemediation[fid] ? 'wait' : 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}
                       >

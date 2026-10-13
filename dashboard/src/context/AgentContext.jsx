@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useReducer } from 'react';
-import { apiFetch } from '../api.js';
+import { apiFetch, apiUrl, dashboardSocketUrl } from '../api.js';
 
 const AgentContext = createContext();
 
@@ -64,20 +64,20 @@ export function AgentProvider({ children, token }) {
 
   useEffect(() => {
     // Initial fetch of known agents and events (401 → re-login via apiFetch)
-    apiFetch(`https://${window.location.host}/api/agents`)
+    apiFetch(apiUrl('/api/agents'))
       .then(res => (res.ok ? res.json() : null))
       .then(data => { if (data) dispatch({ type: 'SET_AGENTS', payload: data }); })
       .catch(err => console.error('Failed to fetch agents', err));
 
-    apiFetch(`https://${window.location.host}/api/events`)
+    apiFetch(apiUrl('/api/events'))
       .then(res => (res.ok ? res.json() : null))
       .then(data => { if (data) dispatch({ type: 'SET_EVENTS', payload: data }); })
       .catch(err => console.error('Failed to fetch events', err));
 
-    // Establish WebSocket connection to backend (session token as query param)
-    const socket = new WebSocket(
-      `wss://${window.location.host}/dashboard?token=${encodeURIComponent(token || '')}`,
-    );
+    // Establish WebSocket connection to backend (session token as query param).
+    // Goes through the Vite ws proxy in dev — a hardcoded wss://<dev host>
+    // would attempt TLS against the plain-HTTP dev server and never connect.
+    const socket = new WebSocket(dashboardSocketUrl(token));
     
     socket.onopen = () => {
       dispatch({ type: 'SET_CONNECTION', payload: 'connected' });

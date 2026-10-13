@@ -80,13 +80,21 @@ export function setupWebSockets(server) {
       try {
         const msg = JSON.parse(data.toString());
         if (msg.type === 'start_assessment') {
-          console.log(`📋 start_assessment → agent_id="${msg.agent_id}" profile="${msg.profile}" test_type="${msg.test_type}"`);
+          // Log the full operator scope, not just profile/test_type: the
+          // module selection, duration and reboot consent are what the report
+          // is later built from, so a mismatch must be visible in the log.
+          const modules = Array.isArray(msg.modules) && msg.modules.length ? msg.modules.join(',') : 'all';
+          console.log(`📋 start_assessment → agent_id="${msg.agent_id}" profile="${msg.profile}" test_type="${msg.test_type}" days="${msg.days ?? 1}" modules="${modules}" allow_reboot="${msg.allow_reboot ?? false}"`);
           const agentExists = !!registry.getAgent(msg.agent_id);
           console.log(`📋 Agent in registry: ${agentExists}`);
           registry.sendToAgent(msg.agent_id, msg);
         } else if (msg.type === 'confirm_assessment') {
           console.log(`✅ confirm_assessment → agent_id="${msg.agent_id}" disable_vendor="${msg.disable_vendor}"`);
           registry.sendToAgent(msg.agent_id, msg);
+        } else {
+          // Previously unknown browser commands vanished with no trace, so a
+          // protocol drift was invisible from both ends. Log it.
+          console.warn(`⚠️  Unhandled browser command type: "${msg.type}"`);
         }
       } catch (err) {
         console.error('Failed to parse browser message', err);

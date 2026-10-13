@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAgentContext } from "../../context/AgentContext.jsx";
-import { apiFetch } from "../../api.js";
+import { apiFetch, buildStartAssessment } from "../../api.js";
 import styles from "./Assessments.module.css";
-import { EmptyState } from "../../components/ui.jsx";
+import { EmptyState, Toast } from "../../components/ui.jsx";
 
 const ALL_MODULES = [
   { id: "malware", name: "Malware (EICAR)", desc: "Drop EICAR test file, measure quarantine time", mitre: "T1059" },
@@ -38,6 +38,11 @@ export default function Assessments() {
   const [selectedModules, setSelectedModules] = useState(ALL_MODULES.map(m => m.id));
   const [singleModule, setSingleModule] = useState("");
   const [allowReboot, setAllowReboot] = useState(false);
+  const [toast, setToast] = useState(null);
+  const showToast = (next) => {
+    setToast(next);
+    setTimeout(() => setToast(null), 5000);
+  };
 
   const agent = state.agents.find(a => a.hostname === hostname);
 
@@ -72,8 +77,23 @@ export default function Assessments() {
         })
       });
       if (res.ok) {
-        sendCommand("start_assessment", { agent_id: hostname, profile, test_type: testType });
+        // Every operator choice must travel with the command. Previously only
+        // profile and test_type were sent, so the agent always ran all modules
+        // at its own startup -days and its own reboot flag, while the DB and
+        // the report claimed the dashboard's selection. That mismatch is fixed
+        // now; keep this list in step with the agent's start_assessment handler.
+        sendCommand(buildStartAssessment({
+          hostname,
+          profile,
+          testType,
+          modules: modulesToRun,
+          days: isAptOrBaseline ? durationDays : 1,
+          allowReboot,
+        }));
         navigate("/console");
+      } else {
+        const body = await res.json().catch(() => ({}));
+        showToast({ tone: "error", message: body.error || `Launch failed (${res.status})` });
       }
     } catch (err) { console.error("Failed to launch", err); }
   };
@@ -145,7 +165,7 @@ export default function Assessments() {
               Allow system reboot (tests ELAM boot survival)
             </label>
             <p style={{ marginTop: "var(--spacing-xs)", fontSize: "0.8rem", color: "var(--n-500)" }}>
-              The agent will reboot the system to test if the EDR survives the boot gap. Requires --allow-reboot on the agent.
+              The agent will reboot the system to test if the EDR survives the boot gap. This consent is sent with the assessment and applies to this run only — the agent's own --allow-reboot flag is not required.
             </p>
           </div>
         )}
@@ -168,6 +188,7 @@ export default function Assessments() {
           <button className="btn-primary" onClick={handleLaunch} disabled={!canLaunch}>Launch {TEST_TYPES.find(t => t.id === testType)?.name || testType} Assessment</button>
         </div>
       </div>
+      {toast && <Toast tone={toast.tone} message={toast.message} />}
     </div>
   );
 }
