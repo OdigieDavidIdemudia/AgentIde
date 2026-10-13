@@ -62,6 +62,11 @@ type Client struct {
 	connected  bool
 	// CommandCh receives parsed commands from the dashboard (e.g. start_assessment).
 	CommandCh chan map[string]interface{}
+	// lastFingerprint is the most recent fingerprint payload. It is re-sent on
+	// every (re)connect because the dashboard only offers a self-update in
+	// response to a fingerprint message — sending it once at startup means a
+	// newly published build is never offered after a reconnect.
+	lastFingerprint interface{}
 }
 
 // NewClient builds a client that tries each dashboard URL in order until one
@@ -72,7 +77,7 @@ type Client struct {
 func NewClient(dashboardURL, agentID, agentToken, certPin string, logger *core.Logger) *Client {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Client{
-		urls:       parseDashboardURLs(dashboardURL, agentToken),
+		urls:       parseDashboardURLs(dashboardURL, agentToken, agentID),
 		agentID:    agentID,
 		agentToken: agentToken,
 		certPin:    certPin,
@@ -86,8 +91,11 @@ func NewClient(dashboardURL, agentID, agentToken, certPin string, logger *core.L
 
 // parseDashboardURLs turns a comma-separated list of dashboard addresses into
 // ready-to-dial WebSocket URLs. Each address has the /agent path appended when
-// missing and the auth token attached as a query parameter.
-func parseDashboardURLs(raw, token string) []string {
+// missing, and the auth token plus the agent's identity attached as query
+// parameters. The agent_id lets the dashboard register the socket at connect
+// time so commands (restart, update, assessment) can be routed to a
+// reconnecting agent before it has re-sent its fingerprint.
+func parseDashboardURLs(raw, token, agentID string) []string {
 	var urls []string
 	for _, part := range strings.Split(raw, ",") {
 		part = strings.TrimSpace(part)
@@ -97,8 +105,15 @@ func parseDashboardURLs(raw, token string) []string {
 		if !strings.HasSuffix(part, "/agent") {
 			part = strings.TrimRight(part, "/") + "/agent"
 		}
+		q := neturl.Values{}
 		if token != "" {
-			part += "?token=" + neturl.QueryEscape(token)
+			q.Set("token", token)
+		}
+		if agentID != "" {
+			q.Set("agent_id", agentID)
+		}
+		if len(q) > 0 {
+			part += "?" + q.Encode()
 		}
 		urls = append(urls, part)
 	}
@@ -243,6 +258,17 @@ func (c *Client) connectLoop() {
 		backoff = 2 * time.Second // Reset backoff on successful connection
 		c.logger.Info("Transport: connected to dashboard — agent is reporting", nil)
 
+		// Re-announce the endpoint on every connect. The dashboard replies to a
+		// fingerprint with an update command when it has a newer build, so a
+		// reconnect after a long uptime is how an agent picks up a release that
+		// was published while it was already running.
+		c.mu.Lock()
+		fp := c.lastFingerprint
+		c.mu.Unlock()
+		if fp != nil {
+			c.Send(EventFingerprint, fp)
+		}
+
 		// Block until connection drops
 		c.readLoop(conn)
 
@@ -369,7 +395,12 @@ func (c *Client) StartHeartbeat() {
 }
 
 // SendFingerprint is a convenience method to send the endpoint fingerprint on startup.
+// The payload is remembered and replayed on every reconnect, because the
+// dashboard only advertises a self-update in response to a fingerprint.
 func (c *Client) SendFingerprint(fp interface{}) {
+	c.mu.Lock()
+	c.lastFingerprint = fp
+	c.mu.Unlock()
 	c.Send(EventFingerprint, fp)
 }
 

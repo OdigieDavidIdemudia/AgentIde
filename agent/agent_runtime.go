@@ -22,6 +22,98 @@ import (
 	"agentide/watchdog"
 )
 
+// handleRemoteControl implements the management commands the dashboard sends
+// over the WebSocket (Agent Management → Restart / Uninstall, and the Fleet
+// view's right-click menu). These were previously accepted by the dashboard
+// and silently ignored by the agent: the command loop only understood
+// agent_token, update_agent and the assessment commands, so the API returned
+// "success" while nothing happened on the endpoint.
+//
+// Every command acknowledges the outcome back to the dashboard before acting,
+// so a failure is visible instead of silent.
+func handleRemoteControl(cmdType string, logger *core.Logger, sender transport.Sender) bool {
+	ack := func(result, detail string) {
+		if sender != nil {
+			sender.Send(transport.EventModuleResult, map[string]interface{}{
+				"module":    "remote_control",
+				"passed":    result == "OK",
+				"result":    result,
+				"detail":    detail,
+				"test_type": "system",
+				"mitre":     "N/A",
+				"timestamp": time.Now().Format(time.RFC3339),
+			})
+		}
+	}
+
+	switch cmdType {
+	case "restart_agent":
+		logger.Info("restart_agent received — restarting service", nil)
+		ack("INFO", "Restart requested; the agent service is restarting")
+		// Give the socket a moment to flush the acknowledgement before the
+		// service stops, then let the SCM bring us back up.
+		go func() {
+			time.Sleep(2 * time.Second)
+			if err := restartSelf(logger); err != nil {
+				logger.Error("Remote restart failed", map[string]interface{}{"error": err.Error()})
+				return
+			}
+			logger.Info("Remote restart issued", nil)
+		}()
+		return true
+
+	case "uninstall_agent":
+		logger.Info("uninstall_agent received — removing service", nil)
+		ack("INFO", "Uninstall requested; removing the AgentIde service")
+		go func() {
+			time.Sleep(2 * time.Second)
+			if err := uninstallSelf(logger); err != nil {
+				logger.Error("Remote uninstall failed", map[string]interface{}{"error": err.Error()})
+				ack("ERROR", "Uninstall failed: "+err.Error())
+				return
+			}
+			ack("OK", "AgentIde service removed")
+		}()
+		return true
+
+	case "rescan":
+		// Re-run discovery immediately and report every vendor found. Useful
+		// after an EDR is installed while the agent is already running.
+		logger.Info("rescan received — re-running discovery", nil)
+		go func() {
+			found, err := discovery.Scan()
+			if err != nil {
+				logger.Warn("Rescan failed", map[string]interface{}{"error": err.Error()})
+				ack("ERROR", "Discovery scan failed: "+err.Error())
+				return
+			}
+			entries := make([]map[string]interface{}, 0, len(found))
+			for _, a := range found {
+				entries = append(entries, map[string]interface{}{
+					"discovered_vendor": a.Vendor,
+					"process_name":      a.ProcessName,
+					"service_name":      a.ServiceName,
+					"pid":               a.PID,
+				})
+			}
+			if sender != nil && len(entries) > 0 {
+				sender.SendDiscovery(entries)
+			}
+			if len(entries) == 0 {
+				ack("OK", "Rescan complete: no known security agents detected")
+			} else {
+				names := make([]string, 0, len(entries))
+				for _, e := range entries {
+					names = append(names, e["discovered_vendor"].(string))
+				}
+				ack("OK", "Rescan complete: "+strings.Join(names, ", "))
+			}
+		}()
+		return true
+	}
+	return false
+}
+
 // fingerprintPayload extends the raw endpoint fingerprint with the agent's
 // current config so the dashboard can display it (Fleet → agent config) and
 // operators can confirm at a glance which dashboard URL an endpoint dialed.
@@ -90,11 +182,21 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 	sender.SendFingerprint(fingerprintPayload(fp, cfg))
 	sender.StartHeartbeat()
 
-	vendor := "None Detected"
+	// Report every vendor found. Sending a synthetic "None Detected" vendor
+	// would be wrong: the dashboard treats the first entry as the primary
+	// agent, so a placeholder would overwrite a real vendor on the next scan.
 	if len(agents) > 0 {
-		vendor = agents[0].Vendor
+		found := make([]map[string]interface{}, 0, len(agents))
+		for _, a := range agents {
+			found = append(found, map[string]interface{}{
+				"discovered_vendor": a.Vendor,
+				"process_name":      a.ProcessName,
+				"service_name":      a.ServiceName,
+				"pid":               a.PID,
+			})
+		}
+		sender.SendDiscovery(found)
 	}
-	sender.SendDiscovery(map[string]interface{}{"discovered_vendor": vendor})
 
 	// Report kill/recovery event to dashboard immediately
 	if killEvent != nil {
@@ -155,6 +257,14 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 
 			for cmd := range sender.Commands() {
 				cmdType, _ := cmd["type"].(string)
+
+				// ── Management commands (restart / uninstall / rescan) ──
+				// Handled before anything else and acknowledged to the
+				// dashboard, so the UI can report the real outcome instead of
+				// a command that silently did nothing.
+				if handleRemoteControl(cmdType, logger, sender) {
+					continue
+				}
 
 				// ── Dashboard assigned a per-agent token ────────────────
 				// Persist it so subsequent reconnects use the bound token

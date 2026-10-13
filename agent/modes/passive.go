@@ -40,8 +40,11 @@ func watchInstallations(cfg *core.Config, logger *core.Logger, sender transport.
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
-	// Keep track of the last discovered agent to avoid spamming events
-	var lastDiscoveredVendor string
+	// Track every vendor we have already reported, so each one is announced
+	// exactly once. A layered estate (Defender + a third-party sensor) can have
+	// several agents running at once and every one of them matters to the
+	// assessment — reporting only the first would hide real coverage.
+	reported := map[string]bool{}
 
 	for range ticker.C {
 		logger.Debug("Passive watch tick", nil)
@@ -52,23 +55,29 @@ func watchInstallations(cfg *core.Config, logger *core.Logger, sender transport.
 			continue
 		}
 
-		if len(agents) > 0 {
-			vendor := agents[0].Vendor
-			if vendor != lastDiscoveredVendor {
-				logger.Info("Discovered security agent", map[string]interface{}{
-					"vendor": vendor,
-					"pid":    agents[0].PID,
-				})
-				lastDiscoveredVendor = vendor
-
-				if sender != nil {
-					sender.SendDiscovery(map[string]interface{}{
-						"discovered_vendor": vendor,
-						"process_name":      agents[0].ProcessName,
-						"service_name":      agents[0].ServiceName,
-					})
-				}
+		var fresh []map[string]interface{}
+		for _, a := range agents {
+			if reported[a.Vendor] {
+				continue
 			}
+			reported[a.Vendor] = true
+			logger.Info("Discovered security agent", map[string]interface{}{
+				"vendor": a.Vendor,
+				"pid":    a.PID,
+			})
+			fresh = append(fresh, map[string]interface{}{
+				"discovered_vendor": a.Vendor,
+				"process_name":      a.ProcessName,
+				"service_name":      a.ServiceName,
+				"pid":               a.PID,
+			})
+		}
+
+		if len(fresh) > 0 && sender != nil {
+			// Send as an array so every vendor on the host reaches the dashboard.
+			// The dashboard's handleDiscovery accepts both this array shape and
+			// the single-object shape older agents send.
+			sender.SendDiscovery(fresh)
 		}
 	}
 	return nil

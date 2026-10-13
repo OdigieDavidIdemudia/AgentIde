@@ -295,7 +295,18 @@ func main() {
 	sender.SendFingerprint(fingerprintPayload(fp, cfg))
 	sender.StartHeartbeat()
 	if len(agents) > 0 {
-		sender.SendDiscovery(map[string]interface{}{"discovered_vendor": agents[0].Vendor})
+		// Report every vendor found, not just the first — a layered estate has
+		// several agents running and each one is part of the assessment scope.
+		found := make([]map[string]interface{}, 0, len(agents))
+		for _, a := range agents {
+			found = append(found, map[string]interface{}{
+				"discovered_vendor": a.Vendor,
+				"process_name":      a.ProcessName,
+				"service_name":      a.ServiceName,
+				"pid":               a.PID,
+			})
+		}
+		sender.SendDiscovery(found)
 	}
 
 	// Run
