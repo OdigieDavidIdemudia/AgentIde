@@ -90,17 +90,25 @@ CLI flags: `-install/-uninstall`, `-check`, `-mode passive|active`, `-profile
 rapid|apt|baseline`, `-days N`, `-module <name>`, `-dashboard <url[,url]>`,
 `-token <secret>`, `-cert-pin <hex>`, `-allow-reboot`.
 
-Prebuilt installers (both run the `-check` above and warn if it fails):
+Prebuilt installers (both verify connectivity before reporting success):
 
-- `agent/msi_output/AgentIDE_0.4.0.msi` — silent MSI:
+- `agent/msi_output/AgentIDE_<version>.msi` — silent MSI. An interactive (GUI)
+  install prompts for the dashboard URL, token and optional cert pin:
   ```powershell
-  msiexec /i AgentIDE_0.4.0.msi /qn DASHBOARD="wss://192.168.1.168:8443" TOKEN="<AGENT_TOKEN>"
+  msiexec /i AgentIDE_0.4.5.msi /qn DASHBOARD="wss://192.168.1.168:8443" TOKEN="<AGENT_TOKEN>"
   ```
-- `agent/msi_output/AgentIDE_Setup.exe` / `AgentIDE_Installer_v0.4.0.exe` —
-  interactive wizard, with silent support:
+  After registering the service the MSI runs `agentide.exe -check` as SYSTEM
+  and records the outcome in the MSI log, so an unreachable dashboard or a
+  rejected token is visible instead of producing a silent no-op install. Pass
+  `VALIDATE=0` to skip it (offline/deployment images).
+- `agent/msi_output/AgentIDE_Installer_v<version>.exe` — interactive wizard with a
+  visible connectivity check, also supporting silent mode:
   ```powershell
-  AgentIDE_Setup.exe /VERYSILENT /DASHBOARDURL="wss://192.168.1.168:8443" /AGENTTOKEN="<AGENT_TOKEN>"
+  AgentIDE_Installer_v0.4.5.exe /VERYSILENT /DASHBOARDURL="wss://192.168.1.168:8443" /AGENTTOKEN="<AGENT_TOKEN>"
   ```
+
+Both are produced from `version.json` by `build_pro.bat`, so the agent binary
+and the installers cannot drift apart.
 
 ### Agent self-update
 
@@ -117,9 +125,14 @@ by `build_pro.bat`) to publish a new version. Set `AGENT_DIST_DIR` to serve a
 build from another directory.
 
 > Note: self-update requires an agent built from v0.3.0 or later (the first
-> release with the `update_agent` command). Older agents — including v0.2.0 —
-> need a one-time reinstall of the current 0.4.0 build; from v0.3.0 onward the
+> release with the `update_agent` command). Agents older than that need a
+> one-time reinstall of the current build (`0.4.5`); from v0.3.0 onward the
 > agent keeps itself up to date.
+>
+> To publish a new version: bump `agent/version.json` and rebuild both the agent
+> binary and the installers with `build_pro.bat`. Publishing is therefore a
+> single-version operation — never bump `version.json` without rebuilding, or
+> the dashboard will serve a version string that does not match the binary.
 
 
 ## Security model
@@ -171,6 +184,35 @@ build from another directory.
 > kernel-mode EDR driver can still terminate any user-mode process; that is
 > what the service recovery actions, guardian service and scheduled task are
 > for — the agent comes back automatically.
+
+## Remote agent management
+
+Operators can act on an agent from the dashboard without console access to the
+endpoint. In **Fleet View**, right-clicking an agent row opens a context menu
+(position-clamped to the viewport, dismisses on Escape / outside click / scroll
+/ resize):
+
+- **Restart agent** — issues a `restart_agent` command. See the note below.
+- **Uninstall agent** — issues an `uninstall_agent` command, which removes the
+  guardian service and scheduled tasks first, then the main service.
+- **Update agent** — pushes the current build (see *Agent self-update*).
+- **Start / stop assessment**.
+
+> **Why restart is not just "stop and start".** The hardened service descriptor
+> denies `SERVICE_STOP` to SYSTEM — that is what stops an EDR from disabling the
+> agent — but it means the agent cannot stop *itself*, because SYSTEM is the
+> caller. The guardian re-applies the hardened descriptor every 15s, so briefly
+> widening it isn't enough either.
+>
+> The supported path is therefore the same one self-update already uses: take
+> the update lock so the guardian stands down, widen the descriptor via
+> `service.Unprotect()`, and let a detached helper issue the stop/start pair.
+> The helper clears the lock even on failure, so a failed restart can't leave
+> self-protection disabled for the lock's expiry window.
+>
+> `restartSelf` is **Windows-only**. On other platforms the agent runs under a
+> supervisor and returns `remote restart is not implemented on <goos>` rather
+> than silently doing nothing.
 
 ## Assessment lifecycle
 
@@ -236,7 +278,45 @@ Work through this checklist:
 
 ## Tests
 
+The single guard runs everything relevant and is what CI executes:
+
+```bash
+scripts\verify.bat          # Windows
+```
+
+It runs, in order:
+
+1. `go vet ./...` — shadowed errors, bad printf verbs, unreachable code
+2. `go build ./...` with `GOOS=windows`
+3. `go build ./...` with `GOOS=linux`
+4. `go test ./...` — watchdog, service, state, modules
+5. `go test -race ./...`
+
+Steps 2 and 3 exist because `modules/helpers_windows.go` and
+`modules/helpers_linux.go` implement the same surface for two platforms. A
+change that only compiles on the host OS otherwise looks green locally while
+breaking the other target — the cross-compile is what catches that.
+
+Step 5 requires cgo and is **skipped with a warning** when no C compiler is on
+PATH, rather than failing the run. On this machine it does skip: the watchdog,
+guardian and transport goroutines are the most concurrency-heavy code in the
+repo and have never been race-checked. To run it:
+
+```bash
+# install a mingw-w64 toolchain, then
+cd agent && CGO_ENABLED=1 go test -race ./...
+```
+
+Individually:
+
 ```bash
 cd agent && go test ./...          # watchdog logic
 cd dashboard && npm test           # auth module
+cd dashboard && npm run build      # frontend production build
 ```
+
+> `dashboard` `npm test` runs `node --test "server/**/*.test.js"`. Do **not**
+> change this back to `node --test server/` — that form executes every `.js`
+> file in the directory, which imports `server/index.js` and starts the real
+> dashboard: it binds `:8443`, opens the WebSocket hub, and connects to
+> Postgres, then never exits. The glob keeps it to actual test files.
