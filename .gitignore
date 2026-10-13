@@ -7,6 +7,11 @@ agent/config.json
 node_modules/
 dist/
 
+# Playwright
+dashboard/test-results/
+dashboard/playwright-report/
+dashboard/.playwright/
+
 # ── Compiled binaries & installers ────────────────────────────────────
 agent/agentide.exe
 agent/agentide_linux
@@ -20,3 +25,11 @@ agent/obj/
 
 # ── Logs & scratch ────────────────────────────────────────────────────
 *.log
+
+# ── Assessment output ─────────────────────────────────────────────────
+# Real engagement artefacts: endpoint hostnames, kill/recovery timestamps,
+# vendor detection results. Evidence from actual runs — do not commit.
+# Use a scrubbed copy (hostnames replaced) if a sample is needed in-repo.
+test_assessment.json
+soc_assessment_report.md
+soc_assessment_report.docx
