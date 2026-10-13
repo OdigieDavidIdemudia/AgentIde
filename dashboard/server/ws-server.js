@@ -134,18 +134,28 @@ export function setupWebSockets(server) {
             ws.send(JSON.stringify({ type: 'agent_token', token: auth.agentToken }));
           }
 
-          // Offer a self-update when the dashboard has a newer build.
+          // Offer a self-update when the dashboard has a newer build — but never while
+          // an assessment is running. Applying an update swaps the agent binary
+          // and restarts the service, which kills an in-flight assessment
+          // mid-run and can re-offer the same update on reconnect, producing a
+          // restart loop that looks like an assessment failure to the operator.
+          // The agent is asked again on its next connect once the run finishes.
           const agentVersion = (msg.payload && msg.payload.version) || '';
-          const update = buildUpdateCommand(request.headers.host, agentVersion);
-          if (update) {
-            ws.send(JSON.stringify(update));
-            console.log(`⬆️  Offered agent update v${update.version} to ${msg.agent_id} (currently v${agentVersion || 'unknown'})`);
-            registry.broadcastToBrowsers({
-              type: 'agent_update_offered',
-              agent_id: msg.agent_id,
-              version: update.version,
-              from_version: agentVersion,
-            });
+          const busy = await isAgentBusy(msg.agent_id);
+          if (busy) {
+            console.log(`⏸️  Skipping agent update for ${msg.agent_id} — assessment in progress`);
+          } else {
+            const update = buildUpdateCommand(request.headers.host, agentVersion);
+            if (update) {
+              ws.send(JSON.stringify(update));
+              console.log(`⬆️  Offered agent update v${update.version} to ${msg.agent_id} (currently v${agentVersion || 'unknown'})`);
+              registry.broadcastToBrowsers({
+                type: 'agent_update_offered',
+                agent_id: msg.agent_id,
+                version: update.version,
+                from_version: agentVersion,
+              });
+            }
           }
         }
 
@@ -383,6 +393,29 @@ async function findAssessmentId(agentDbId, sessionId) {
     await pool.query('UPDATE assessments SET session_id = $1 WHERE id = $2', [sessionId, r.rows[0].id]);
   }
   return r.rows[0].id;
+}
+
+// True when the agent has an assessment in flight. Used to withhold
+// disruptive self-updates until the run finishes. Fails closed on error so a
+// database hiccup cannot cause a mid-assessment restart.
+async function isAgentBusy(hostname) {
+  try {
+    const r = await pool.query(
+      `SELECT EXISTS (
+         SELECT 1 FROM assessments s
+          WHERE s.agent_id = a.id
+            AND s.status = 'running'
+       ) AS busy
+         FROM agents a
+        WHERE a.hostname = $1
+        LIMIT 1`,
+      [hostname],
+    );
+    return !!(r.rows[0] && r.rows[0].busy);
+  } catch (err) {
+    console.error('isAgentBusy check failed; withholding update', err);
+    return true;
+  }
 }
 
 async function updateLastSeen(hostname) {
