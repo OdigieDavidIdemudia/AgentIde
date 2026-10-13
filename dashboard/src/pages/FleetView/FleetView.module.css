@@ -104,3 +104,89 @@
 .actions {
   text-align: right;
 }
+
+/* ── Right-click row context menu ──────────────────────────────────
+   Row-level actions mirroring the Agent Management module (restart /
+   update / uninstall / config) plus assessment launch. Positioned
+   fixed at the pointer, clamped to the viewport so it never opens
+   off-screen near the bottom-right of the table. */
+.rowActionable {
+  cursor: context-menu;
+}
+
+.rowSelected td {
+  background-color: rgba(0, 212, 170, 0.06);
+}
+
+.contextMenu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 220px;
+  padding: var(--spacing-xxs) 0;
+  background-color: var(--surface-raised, var(--surface));
+  border: var(--border-width) solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+}
+
+.contextHeader {
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-family: var(--font-mono);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: var(--border-width) solid var(--border);
+  margin-bottom: var(--spacing-xxs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.contextItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: none;
+  border: none;
+  text-align: left;
+  font-family: var(--font-body);
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.contextItem:hover:not(:disabled),
+.contextItem:focus-visible {
+  background-color: rgba(0, 212, 170, 0.12);
+  outline: none;
+}
+
+.contextItem:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.contextItemDanger {
+  color: var(--fail);
+}
+
+.contextItemDanger:hover:not(:disabled) {
+  background-color: rgba(255, 77, 77, 0.14);
+}
+
+.contextDivider {
+  height: 1px;
+  margin: var(--spacing-xxs) 0;
+  background-color: var(--border);
+}
+
+.contextStatus {
+  padding: var(--spacing-xxs) var(--spacing-md) 0;
+  font-size: var(--font-xs);
+  color: var(--text-secondary);
+}
