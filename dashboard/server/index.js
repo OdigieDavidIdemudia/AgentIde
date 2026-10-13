@@ -173,14 +173,33 @@ app.get('/api/assessments/:id/results', async (req, res) => {
       return res.status(404).json({ error: 'Assessment not found' });
     }
     const result = await pool.query(`
-      SELECT r.*, a.profile, a.started_at, ag.hostname
+      SELECT r.*, a.profile, a.started_at, a.modules, ag.hostname
       FROM results r
       JOIN assessments a ON a.id = r.assessment_id
       JOIN agents ag ON ag.id = a.agent_id
       WHERE r.assessment_id = $1
       ORDER BY r.recorded_at ASC
     `, [id]);
-    res.json(result.rows);
+    // `mitre` has no dedicated column: the agent's MITRE ID is stored JSON-encoded
+    // inside `notes`. Surface it as a real field so the report can group by
+    // technique instead of every row showing a blank MITRE. Falls back to the
+    // recorded timestamp when the blob predates it.
+    res.json(result.rows.map((row) => {
+      let mitre = null;
+      if (row.notes) {
+        try {
+          const parsed = JSON.parse(row.notes);
+          mitre = parsed && parsed.mitre ? parsed.mitre : null;
+        } catch {
+          // notes is plain prose, not JSON — leave mitre null.
+        }
+      }
+      return {
+        ...row,
+        mitre,
+        recorded_ts: row.recorded_at,
+      };
+    }));
   } catch (err) {
     console.error('Failed to get assessment results:', err);
     res.status(500).json({ error: 'Failed to get assessment results' });

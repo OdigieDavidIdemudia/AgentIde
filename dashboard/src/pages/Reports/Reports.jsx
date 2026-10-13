@@ -102,6 +102,13 @@ function extractTactic(mitreId) {
 export default function Reports() {
   const { state } = useAgentContext();
   const [activeAgent, setActiveAgent] = useState(null);
+  // Which assessment run is being viewed. Without this the page merged every
+  // run for an agent into one undifferentiated list, so there was no way to
+  // tell which assessment you were looking at.
+  const [runs, setRuns] = useState([]);
+  const [activeRunId, setActiveRunId] = useState(null);
+  const [runResults, setRunResults] = useState([]);
+  const [loadingRun, setLoadingRun] = useState(false);
   const [remediations, setRemediations] = useState({});
   const [loadingRemediation, setLoadingRemediation] = useState({});
   const [isGenerating, setIsGenerating] = useState(false);
@@ -120,6 +127,66 @@ export default function Reports() {
   }, [state.events, state.agents]);
 
   const selected = activeAgent || agentIds[0] || null;
+
+  // Load the assessment runs for the selected agent and default to the newest.
+  // Sourced from the database rather than live WebSocket events so the page
+  // survives a dashboard restart and always shows a complete, labelled run.
+  useEffect(() => {
+    if (!selected) {
+      setRuns([]);
+      setRunResults([]);
+      setActiveRunId(null);
+      return;
+    }
+    let cancelled = false;
+    setLoadingRun(true);
+    apiFetch(`/api/agents/${encodeURIComponent(selected)}/assessments`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rows) => {
+        if (cancelled) return;
+        const list = Array.isArray(rows) ? rows : [];
+        setRuns(list);
+        setActiveRunId((prev) => {
+          if (prev && list.some((r) => r.id === prev)) return prev;
+          return list.length ? list[0].id : null;
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setRuns([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingRun(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selected]);
+
+  // Load the module results for the chosen run.
+  useEffect(() => {
+    if (!activeRunId) {
+      setRunResults([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingRun(true);
+    apiFetch(`/api/assessments/${activeRunId}/results`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rows) => {
+        if (!cancelled) setRunResults(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (!cancelled) setRunResults([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingRun(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRunId]);
+
+  const activeRun = runs.find((r) => r.id === activeRunId) || null;
 
   // Live module results for selected agent
   const moduleResults = useMemo(() =>
@@ -161,12 +228,14 @@ export default function Reports() {
     return findings;
   }, [state.events, selected]);
 
-  // Summary counts. Only real verdicts are counted: an INFO ack (a restart,
-  // a self-update) is not a module that was tested, so including it would
-  // inflate the total and post a phantom failure against the score.
-  const totalModules = moduleResults.filter(e => !NON_VERDICT_RESULTS.has(e.payload?.result)).length;
-  const passedModules = moduleResults.filter(e => isVerdictPass(deriveResult(e.payload))).length;
-  const failedModules = Math.max(0, totalModules - passedModules);
+  // Summary counts come from the selected run's persisted results, so they
+  // describe exactly one labelled assessment instead of every run ever made.
+  // Only real verdicts count: an INFO ack (a restart, a self-update) is not a
+  // module that was tested, so including it would post a phantom failure.
+  const runVerdicts = runResults.filter((r) => !NON_VERDICT_RESULTS.has(r.action));
+  const totalModules = runVerdicts.length;
+  const passedModules = runVerdicts.filter((r) => isVerdictPass(r.action)).length;
+  const failedModules = runVerdicts.filter((r) => !isVerdictPass(r.action)).length;
   const totalTampers = tamperEvents.length;
 
   // MITRE Calculation - use module results and tamper events
@@ -180,18 +249,16 @@ export default function Reports() {
       if (isPass) stats[tactic].passed += 1;
     };
     
-    // Use module results and tamper events for MITRE stats. Informational acks
-    // are skipped so they cannot register as a failed technique.
-    moduleResults.forEach(m => {
-      const result = deriveResult(m.payload);
-      if (NON_VERDICT_RESULTS.has(result)) return;
-      addStat(m.payload?.mitre, isVerdictPass(result));
+    // Use the selected run's results for MITRE stats. Informational acks are
+    // skipped so they cannot register as a failed technique.
+    runVerdicts.forEach((r) => {
+      addStat(r.mitre, isVerdictPass(r.action));
     });
     tamperEvents.forEach(e => {
       addStat(e.payload?.mitre, true); // tamper events are BLOCKED_BY_EDR = pass
     });
     return stats;
-  }, [moduleResults, tamperEvents]);
+  }, [runResults, tamperEvents]);
 
   if (agentIds.length === 0) {
     return (
@@ -388,19 +455,96 @@ export default function Reports() {
         ))}
       </div>
 
+      {/* Which run are we looking at? Without this the page merged every run
+          for the agent together and there was no way to tell which assessment
+          you were reading. */}
+      <div className={styles.agentTabs} role="group" aria-label="Assessment run">
+        {loadingRun && runs.length === 0 && <span style={{ padding: '8px', color: 'var(--text-secondary)' }}>Loading runs…</span>}
+        {!loadingRun && runs.length === 0 && (
+          <span style={{ padding: '8px', color: 'var(--text-secondary)' }}>No assessments recorded for this agent yet.</span>
+        )}
+        {runs.map((r) => {
+          const when = r.started_at ? new Date(r.started_at) : null;
+          const label = when
+            ? `${when.toLocaleDateString()} ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+            : 'unknown time';
+          const isActive = activeRunId === r.id;
+          return (
+            <button
+              key={r.id}
+              role="radio"
+              aria-checked={isActive}
+              className={`${styles.tab} ${isActive ? styles.tabActive : ''}`}
+              onClick={() => setActiveRunId(r.id)}
+              style={r.status !== 'completed' ? { opacity: 0.75 } : undefined}
+              title={`Run ${r.id.slice(0, 8)} — ${r.status} — profile ${r.profile || 'unknown'} — ${r.result_count ?? 0} results`}
+            >
+              {label} · {r.profile || 'unknown'}
+              {r.status !== 'completed' && (
+                <span style={{ marginLeft: 6, fontSize: '0.7em', color: 'var(--accent)' }}>
+                  {r.status}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* What exactly this run was */}
+      {activeRun && (
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '8px 20px',
+            padding: '10px 12px',
+            marginBottom: '4px',
+            background: 'var(--surface)',
+            borderLeft: '3px solid var(--accent)',
+            borderRadius: '4px',
+            fontSize: '0.82rem',
+            color: 'var(--text-secondary)',
+          }}
+        >
+          <span><strong style={{ color: 'var(--text-primary)' }}>Run</strong> {activeRun.id.slice(0, 8)}</span>
+          <span><strong style={{ color: 'var(--text-primary)' }}>Agent</strong> {activeRun.hostname || selected}</span>
+          <span><strong style={{ color: 'var(--text-primary)' }}>Profile</strong> {activeRun.profile || 'unknown'}</span>
+          <span><strong style={{ color: 'var(--text-primary)' }}>Test type</strong> {activeRun.test_type || 'unknown'}</span>
+          <span><strong style={{ color: 'var(--text-primary)' }}>Started</strong> {activeRun.started_at ? new Date(activeRun.started_at).toLocaleString() : '—'}</span>
+          {activeRun.completed_at && (
+            <span><strong style={{ color: 'var(--text-primary)' }}>Finished</strong> {new Date(activeRun.completed_at).toLocaleString()}</span>
+          )}
+          <span>
+            <strong style={{ color: 'var(--text-primary)' }}>Status</strong>{' '}
+            <span style={{ color: activeRun.status === 'completed' ? 'var(--accent)' : '#ef476f' }}>
+              {activeRun.status}
+            </span>
+          </span>
+          {activeRun.modules?.length > 0 && (
+            <span><strong style={{ color: 'var(--text-primary)' }}>Modules</strong> {activeRun.modules.join(', ')}</span>
+          )}
+        </div>
+      )}
+
       {/* Summary row */}
       <div className={styles.summary}>
         <div className={styles.summaryCard}>
           <div className={styles.summaryLabel}>Modules Run</div>
-          <div className={`${styles.summaryValue} ${styles.neutral}`}>{totalModules || assessmentDone?.payload?.total_modules || "—"}</div>
+          <div className={`${styles.summaryValue} ${styles.neutral}`}>{totalModules || "—"}</div>
         </div>
         <div className={styles.summaryCard}>
           <div className={styles.summaryLabel}>Passed</div>
-          <div className={`${styles.summaryValue} ${styles.pass}`}>{passedModules || assessmentDone?.payload?.passed || "—"}</div>
+          <div className={`${styles.summaryValue} ${styles.pass}`}>{totalModules ? passedModules : "—"}</div>
         </div>
         <div className={styles.summaryCard}>
           <div className={styles.summaryLabel}>Failed / Blocked</div>
-          <div className={`${styles.summaryValue} ${styles.fail}`}>{failedModules || assessmentDone?.payload?.failed || "—"}</div>
+          <div className={`${styles.summaryValue} ${styles.fail}`}>{totalModules ? failedModules : "—"}</div>
+        </div>
+        <div className={styles.summaryCard}>
+          <div className={styles.summaryLabel}>Score</div>
+          <div className={`${styles.summaryValue} ${styles.neutral}`}>
+            {activeRun?.score != null ? Math.round(activeRun.score) : "—"}
+          </div>
         </div>
         <div className={styles.summaryCard}>
           <div className={styles.summaryLabel}>Kill / Recovery Events</div>
@@ -473,33 +617,36 @@ export default function Reports() {
       )}
 
       {/* Assessment Modules */}
-      {moduleResults.length > 0 && (
+      {runResults.length > 0 && (
         <div className={styles.section}>
           <div className={styles.sectionTitle}>Assessment Modules</div>
-          {moduleResults.map((e, i) => {
-            const result = deriveResult(e.payload);
+          {runResults.map((r, i) => {
+            const result = r.action || (r.passed ? 'PASS' : 'FAIL');
             // An INFO ack is not a gap, so it must not render as one.
             const isGap = !NON_VERDICT_RESULTS.has(result) && !isVerdictPass(result);
             const fid = `mod-${i}`;
+            const artifacts = Array.isArray(r.artifacts) ? r.artifacts : [];
             return (
-              <div key={i} style={{ display: 'flex', flexDirection: 'column' }}>
+              <div key={r.id || i} style={{ display: 'flex', flexDirection: 'column' }}>
                 <div className={styles.findingRow}>
                   <div>{resultBadge(result, styles)}</div>
                   <div style={{ flex: 1 }}>
-                    <div className={styles.findingTitle}>{e.payload?.module}</div>
-                    <div className={styles.findingDetail}>{humaniseDetail(e.payload)}</div>
-                    {e.payload?.duration_ms && <div className={styles.mitre} style={{marginTop:2}}>Duration: {e.payload.duration_ms}ms</div>}
-                    {e.payload?.artifacts?.length > 0 && (
+                    <div className={styles.findingTitle}>{r.module_name}</div>
+                    <div className={styles.findingDetail}>{r.detail || 'No additional detail reported.'}</div>
+                    {r.notes && <div className={styles.mitre} style={{marginTop:2}}>{r.notes}</div>}
+                    {r.elapsed_ms > 0 && <div className={styles.mitre} style={{marginTop:2}}>Duration: {r.elapsed_ms}ms</div>}
+                    {r.mitre && <div className={styles.mitre} style={{marginTop:2}}>MITRE: {r.mitre}</div>}
+                    {artifacts.length > 0 && (
                       <div className={styles.mitre} style={{ marginTop: 4 }}>
                         Files created:
-                        {e.payload.artifacts.map((a, ai) => (
+                        {artifacts.map((a, ai) => (
                           <code key={ai} style={{ display: 'block', wordBreak: 'break-all', color: 'var(--text-secondary)' }}>{a}</code>
                         ))}
                       </div>
                     )}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: 'flex-end' }}>
-                    {typeBadge(e.payload?.test_type, styles)}
+                    {typeBadge(r.test_type, styles)}
                     {isGap && !remediations[fid] && (
                       <button 
                         onClick={() => handleGenerateRemediation(fid, { module: e.payload?.module, detail: e.payload?.detail, mitre: e.payload?.mitre })}
@@ -510,7 +657,7 @@ export default function Reports() {
                       </button>
                     )}
                   </div>
-                  <div className={styles.mitre}>{fmtTime(e.timestamp)}</div>
+                  <div className={styles.mitre}>{fmtTime(r.recorded_at)}</div>
                 </div>
                 
                 {/* AI Remediation Output */}
