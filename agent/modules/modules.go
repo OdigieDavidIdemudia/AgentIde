@@ -84,3 +84,28 @@ func NewFalsePositiveModule(logger *core.Logger) Module {
 func NewRebootModule(logger *core.Logger, cfg *core.Config) Module {
 	return &rebootModule{logger: logger, cfg: cfg}
 }
+
+// NewDisableETWModule creates the ETW provider disable test module.
+func NewDisableETWModule(logger *core.Logger, cfg *core.Config) Module {
+	return &disableETWModule{logger: logger, cfg: cfg}
+}
+
+// NewDisableAMSIModule creates the AMSI disable test module.
+func NewDisableAMSIModule(logger *core.Logger, cfg *core.Config) Module {
+	return &disableAMSIModule{logger: logger, cfg: cfg}
+}
+
+// NewDisableETWTamperModule creates the ETW tamper test module.
+func NewDisableETWTamperModule(logger *core.Logger, cfg *core.Config) Module {
+	return &disableETWTamperModule{logger: logger, cfg: cfg}
+}
+
+// NewUnloadDriverModule creates the EDR driver unload test module.
+func NewUnloadDriverModule(logger *core.Logger, cfg *core.Config) Module {
+	return &unloadDriverModule{logger: logger, cfg: cfg}
+}
+
+// NewModifyRegistryPoliciesModule creates the registry policy modification test module.
+func NewModifyRegistryPoliciesModule(logger *core.Logger, cfg *core.Config) Module {
+	return &modifyRegistryPoliciesModule{logger: logger, cfg: cfg}
+}

@@ -42,16 +42,22 @@ AppVerName=AgentIDE {#AppVersion}
 
 [Files]
 Source: "agentide.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "agentide-tray.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion isreadme
 
 [Icons]
 Name: "{group}\AgentIDE Dashboard"; Filename: "https://localhost:8443"; IconFilename: "{app}\agentide.exe"; WorkingDir: "{app}"
+Name: "{group}\AgentIDE Tray"; Filename: "{app}\agentide-tray.exe"; IconFilename: "{app}\agentide-tray.exe"; WorkingDir: "{app}"
 Name: "{group}\Uninstall AgentIDE"; Filename: "{uninstallexe}"; IconFilename: "{app}\agentide.exe"
 
 [Run]
 ; Install the service — writes config.json with URL, token, cert pin, allow_reboot.
 ; The optional --allow-reboot argument is appended only when the user opted in.
 Filename: "{app}\agentide.exe"; Parameters: "--install --dashboard ""{code:GetDashboardUrl}"" --token ""{code:GetAgentToken}"" --cert-pin ""{code:GetCertPin}""{code:GetAllowRebootArg}"; Flags: runhidden waituntilterminated; AfterInstall: VerifyDashboardConnection; StatusMsg: "Installing and starting the AgentIDE service..."
+
+[Registry]
+; Auto-start the tray app on user login
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "AgentIDE Tray"; ValueData: """{app}\agentide-tray.exe"""; Flags: uninsdeletevalue
 
 [UninstallRun]
 Filename: "sc.exe"; Parameters: "stop AgentIde"; RunOnceId: "StopSvc"; Flags: runhidden waituntilterminated; StatusMsg: "Stopping AgentIDE service..."

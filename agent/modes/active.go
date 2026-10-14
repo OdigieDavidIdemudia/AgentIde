@@ -417,6 +417,11 @@ func buildModuleList(cfg *core.Config, logger *core.Logger, target discovery.Dis
 		modules.NewAntiTamperModule(logger, target),
 		modules.NewFalsePositiveModule(logger),
 		modules.NewRebootModule(logger, cfg),
+		modules.NewDisableETWModule(logger, cfg),
+		modules.NewDisableAMSIModule(logger, cfg),
+		modules.NewDisableETWTamperModule(logger, cfg),
+		modules.NewUnloadDriverModule(logger, cfg),
+		modules.NewModifyRegistryPoliciesModule(logger, cfg),
 	}
 }
 

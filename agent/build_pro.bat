@@ -38,7 +38,7 @@ REM NOTE 1: the old "-buildid=" flag was passed via -ldflags, where it collides
 REM with the Go linker's own -buildid option and fails the build.
 REM NOTE 2: %DATE% expands to "Sat 10/10/2026" - spaces and slashes break the
 REM -ldflags quoting, so use a sortable ISO-ish stamp instead.
-echo [1/4] Building deterministic agentide.exe...
+echo [1/5] Building deterministic agentide.exe...
 for /f "tokens=2-4 delims=/ " %%d in ("%DATE%") do set BUILDDATE=%%d-%%f-%%g
 go build -trimpath -ldflags="-s -w -X main.version=%VERSION% -X main.buildDate=%BUILDDATE%" -o agentide.exe .
 if %ERRORLEVEL% neq 0 (
@@ -48,6 +48,20 @@ if %ERRORLEVEL% neq 0 (
 echo Binary: agentide.exe
 for %%f in (agentide.exe) do echo Size: %%~zf bytes
 CertUtil -hashfile agentide.exe SHA256
+echo.
+
+REM 1b. Build system tray companion app
+echo [1b/5] Building system tray companion (agentide-tray.exe)...
+cd tray
+go build -trimpath -ldflags="-s -w -X main.version=%VERSION% -X main.buildDate=%BUILDDATE%" -o ..\agentide-tray.exe .
+if %ERRORLEVEL% neq 0 (
+    echo ERROR: Tray build failed
+    exit /b 1
+)
+cd ..
+echo Binary: agentide-tray.exe
+for %%f in (agentide-tray.exe) do echo Size: %%~zf bytes
+CertUtil -hashfile agentide-tray.exe SHA256
 echo.
 
 REM 2. Build professional installer.
