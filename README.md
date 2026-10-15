@@ -117,7 +117,7 @@ Prebuilt installers (both verify connectivity before reporting success):
 - `agent/msi_output/AgentIDE_Installer_v<version>.exe` — interactive wizard with a
   visible connectivity check, also supporting silent mode:
   ```powershell
-  AgentIDE_Installer_v0.4.8.exe /VERYSILENT /DASHBOARDURL="wss://192.168.1.168:8443" /AGENTTOKEN="<AGENT_TOKEN>"
+  AgentIDE_Installer_v0.4.9.exe /VERYSILENT /DASHBOARDURL="wss://192.168.1.168:8443" /AGENTTOKEN="<AGENT_TOKEN>"
   ```
 
 Both are produced from `version.json` by `build_pro.bat`, so the agent binary
@@ -139,7 +139,7 @@ build from another directory.
 
 > Note: self-update requires an agent built from v0.3.0 or later (the first
 > release with the `update_agent` command). Agents older than that need a
-> one-time reinstall of the current build (`0.4.8`); from v0.3.0 onward the
+> one-time reinstall of the current build (`0.4.9`); from v0.3.0 onward the
 > agent keeps itself up to date.
 >
 > To publish a new version: bump `agent/version.json` and rebuild both the agent
@@ -163,6 +163,16 @@ build from another directory.
 > claiming more than they proved — the in-process AMSI patch is now scoped as
 > agent-process-only, and "ETW trace files corrupted" became "trace log path
 > redirected".
+>
+> **v0.4.9** fixes EDR kill detection (`8e4c518`). A vendor that successfully
+> blocks the agent produced a silent, zero-result run: the agent reconnected but
+> reported nothing, because detection compared the heartbeat gap against a fixed
+> 45-second threshold and the SCM restarts a killed service within seconds. The
+> faster the EDR killed and recovered us, the less likely we recorded it.
+> Detection now uses a clean-exit marker instead of elapsed time. The liveness
+> state also moved out of `%TEMP%` — which for a SYSTEM service is
+> `C:\Windows\Temp`, a directory EDRs target — to `C:\ProgramData\AgentIde`, and
+> the heartbeat writer now recreates its state file if it is deleted.
 
 
 ## Security model
