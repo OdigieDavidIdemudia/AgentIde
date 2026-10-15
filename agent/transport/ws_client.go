@@ -182,6 +182,9 @@ func (c *Client) IsConnected() bool {
 func (c *Client) connectLoop() {
 	backoff := 2 * time.Second
 	const maxBackoff = 60 * time.Second
+	// A connection shorter than this is treated as a flap rather than a
+	// healthy session, and triggers the backoff above.
+	const flapThreshold = 15 * time.Second
 
 	// Allow self-signed certificates for POC/internal deployments. When a cert
 	// pin is configured, the peer certificate's SPKI SHA-256 must match instead
@@ -256,7 +259,7 @@ func (c *Client) connectLoop() {
 		c.connected = true
 		c.mu.Unlock()
 
-		backoff = 2 * time.Second // Reset backoff on successful connection
+		connectedAt := time.Now()
 		c.logger.Info("Transport: connected to dashboard — agent is reporting", nil)
 
 		// Re-announce the endpoint on every connect. The dashboard replies to a
@@ -278,7 +281,36 @@ func (c *Client) connectLoop() {
 		c.conn = nil
 		c.mu.Unlock()
 
-		c.logger.Warn("Transport: connection lost, reconnecting...", nil)
+		c.logger.Warn("Transport: connection lost, reconnecting...", map[string]interface{}{
+			"connected_for": time.Since(connectedAt).Truncate(time.Millisecond).String(),
+		})
+
+		// Flap backoff. A connection that drops almost immediately means the
+		// dashboard is rejecting us repeatedly — most often because a second
+		// process for this host is registered under the same agent_id, and each
+		// registration evicts the other's socket. Re-dialing instantly turns
+		// that into a livelock: both agents evict each other forever, hammering
+		// the dashboard hundreds of times a second and never settling on a
+		// usable socket. Backing off lets the last registration win and stay.
+		if time.Since(connectedAt) < flapThreshold {
+			c.logger.Warn("Transport: connection dropped immediately, backing off", map[string]interface{}{
+				"backoff": backoff.String(),
+			})
+			select {
+			case <-c.ctx.Done():
+				return
+			case <-time.After(backoff):
+			}
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+			continue
+		}
+
+		// A connection that stayed up long enough is genuinely healthy, so the
+		// next failure starts from the base delay again.
+		backoff = 2 * time.Second
 	}
 }
 

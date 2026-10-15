@@ -1,4 +1,4 @@
-import './env.js'; // must load .env before db.js creates the connection pool
+﻿import './env.js'; // must load .env before db.js creates the connection pool
 import express from 'express';
 import https from 'https';
 import fs from 'fs';
@@ -9,6 +9,7 @@ import { setupWebSockets } from './ws-server.js';
 import { pool } from './db.js';
 import { issueToken, revokeToken, requireAuth, checkAdminCredentials, isLoginAllowed, registerLoginFailure } from './auth.js';
 import { getLatestAgent, buildUpdateCommand } from './agent-update.js';
+import { resolveAgentIdentity } from './agent-identity.js';
 
 const allowedOrigins = (process.env.CORS_ORIGINS || '')
   .split(',')
@@ -20,11 +21,11 @@ const app = express();
 app.use(cors(allowedOrigins.length > 0 ? { origin: allowedOrigins } : { origin: false }));
 app.use(express.json());
 
-// ── Auth ──────────────────────────────────────────────────────────
+// â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.post('/api/auth/login', (req, res) => {
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
   if (!isLoginAllowed(ip)) {
-    return res.status(429).json({ error: 'Too many failed attempts — try again later' });
+    return res.status(429).json({ error: 'Too many failed attempts â€” try again later' });
   }
   const { email, password } = req.body || {};
   if (checkAdminCredentials(email, password)) {
@@ -41,10 +42,10 @@ app.post('/api/auth/logout', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
-// Session validity check — used by the frontend to detect expiry.
+// Session validity check â€” used by the frontend to detect expiry.
 app.get('/api/auth/me', requireAuth, (req, res) => res.json({ ok: true }));
 
-// Public liveness probe — deliberately unauthenticated so you can verify the
+// Public liveness probe â€” deliberately unauthenticated so you can verify the
 // dashboard is reachable from an agent host before wiring up the agent:
 //   curl -k https://<dashboard-ip>:8443/healthz
 app.get('/healthz', (req, res) =>
@@ -81,6 +82,20 @@ app.get('/api/agents', async (req, res) => {
     const result = await pool.query('SELECT * FROM agents ORDER BY last_seen DESC');
     res.json(result.rows);
   } catch (err) {
+    res.status(500).json({ error: 'Database query failed' });
+  }
+});
+
+app.get('/api/agents/:hostname', async (req, res) => {
+  try {
+    const { hostname } = req.params;
+    const result = await pool.query('SELECT * FROM agents WHERE hostname = $1', [hostname]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Failed to get agent:', err);
     res.status(500).json({ error: 'Database query failed' });
   }
 });
@@ -138,9 +153,29 @@ app.get('/api/assessments', async (req, res) => {
   }
 });
 
+// Get single assessment by ID
+app.get('/api/assessments/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(`
+      SELECT a.*, ag.hostname 
+      FROM assessments a 
+      JOIN agents ag ON a.agent_id = ag.id 
+      WHERE a.id = $1
+    `, [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Assessment not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Failed to get assessment:', err);
+    res.status(500).json({ error: 'Database query failed' });
+  }
+});
+
 // Assessment history for one agent, newest first. The Reports UI used to build
 // its whole view from live WebSocket events, which meant a dashboard restart
-// wiped the visible history — the rows below survive restarts.
+// wiped the visible history â€” the rows below survive restarts.
 app.get('/api/agents/:hostname/assessments', async (req, res) => {
   try {
     const { hostname } = req.params;
@@ -191,7 +226,7 @@ app.get('/api/assessments/:id/results', async (req, res) => {
           const parsed = JSON.parse(row.notes);
           mitre = parsed && parsed.mitre ? parsed.mitre : null;
         } catch {
-          // notes is plain prose, not JSON — leave mitre null.
+          // notes is plain prose, not JSON â€” leave mitre null.
         }
       }
       return {
@@ -241,7 +276,7 @@ app.get('/api/agents/:hostname/summary', async (req, res) => {
       ORDER BY last_run DESC
     `, [agentId]);
 
-    // Blackbox vs whitebox comparison — these measure different things, so a
+    // Blackbox vs whitebox comparison â€” these measure different things, so a
     // single blended score would be misleading.
     const byTestType = await pool.query(`
       SELECT COALESCE(a.test_type, 'unspecified') AS test_type,
@@ -312,17 +347,30 @@ app.get('/api/agents/:hostname/summary', async (req, res) => {
   }
 });
 
+// After creating assessment, send start_assessment command via WebSocket
 app.post('/api/assessments', async (req, res) => {
   let { agent_id, profile, duration_days, modules, allow_reboot, test_type } = req.body;
   try {
-    // If agent_id is a hostname instead of a UUID, resolve it
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(agent_id)) {
-      const agentRes = await pool.query('SELECT id FROM agents WHERE hostname = $1', [agent_id]);
-      if (agentRes.rows.length === 0) {
-        return res.status(404).json({ error: 'Agent not found' });
-      }
-      agent_id = agentRes.rows[0].id;
+    // Two different identifiers are in play and must not be confused:
+    //  - the DB primary key (a UUID) used for the assessments row
+    //  - the hostname, which is what the WebSocket registry keys sockets on
+    // Resolving one into the other used to overwrite agent_id with the UUID and
+    // then pass that UUID to sendToAgent, which found no socket and dropped the
+    // command: the row was created but the agent never ran.
+    const identity = await resolveAgentIdentity(agent_id, async (value, byUuid) => {
+      const r = await pool.query(
+        byUuid
+          ? 'SELECT id, hostname FROM agents WHERE id = $1'
+          : 'SELECT id, hostname FROM agents WHERE hostname = $1',
+        [value],
+      );
+      return r.rows[0];
+    });
+    if (!identity) {
+      return res.status(404).json({ error: 'Agent not found' });
     }
+    agent_id = identity.dbId;
+    const socketId = identity.socketId;
 
     const result = await pool.query(`
       INSERT INTO assessments (agent_id, profile, duration_days, modules, status, allow_reboot, test_type)
@@ -336,6 +384,23 @@ app.post('/api/assessments', async (req, res) => {
       `UPDATE agents SET state = 'assessment', assessment_id = $1 WHERE id = $2`,
       [result.rows[0].id, agent_id],
     );
+
+    // Send start_assessment command via WebSocket
+    const { registry } = await import('./agent-registry.js');
+    const modulesStr = Array.isArray(modules) && modules.length ? modules.join(',') : 'all';
+    console.log(`📋 start_assessment → agent="${socketId}" profile="${profile}" test_type="${test_type}" days="${duration_days ?? 1}" modules="${modulesStr}" allow_reboot="${allow_reboot ?? false}"`);
+    const sent = registry.sendToAgent(socketId, {
+      type: 'start_assessment',
+      agent_id: socketId,
+      profile,
+      test_type: test_type || 'blackbox',
+      modules,
+      days: duration_days || 1,
+      allow_reboot: allow_reboot || false,
+    });
+    if (!sent.ok) {
+      console.error('Failed to send start_assessment:', sent.error);
+    }
 
     res.json(result.rows[0]);
   } catch (err) {
@@ -360,9 +425,15 @@ app.post('/api/assessments/:id/stop', async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(409).json({ error: 'Assessment not running or does not exist' });
     }
+    // assessments.agent_id is the DB UUID; the WebSocket registry is keyed by
+    // hostname, so join for it rather than sending to a key that does not exist.
     const { agent_id } = result.rows[0];
+    const hostRes = await pool.query('SELECT hostname FROM agents WHERE id = $1', [agent_id]);
+    const socketId = hostRes.rows[0]?.hostname;
     const { registry } = await import('./agent-registry.js');
-    const sent = registry.sendToAgent(agent_id, { type: 'stop_assessment', assessment_id: id });
+    const sent = socketId
+      ? registry.sendToAgent(socketId, { type: 'stop_assessment', assessment_id: id })
+      : { ok: false, error: `No hostname for agent ${agent_id}` };
     if (!sent.ok) {
       return res.status(409).json({ error: sent.error });
     }
@@ -515,7 +586,7 @@ Keep it concise. Use Markdown formatting. Return ONLY the markdown.`;
   }
 });
 
-// ── Agent Management ─────────────────────────────────────────────
+// â”€â”€ Agent Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.post('/api/agents/:hostname/restart', async (req, res) => {
   try {
     const { hostname } = req.params;
@@ -524,7 +595,7 @@ app.post('/api/agents/:hostname/restart', async (req, res) => {
       return res.status(404).json({ error: 'Agent not found' });
     }
     // Send restart command via WebSocket. The registry reports whether the
-    // command was actually delivered — an offline agent must return an error,
+    // command was actually delivered â€” an offline agent must return an error,
     // not a "success" that silently did nothing.
     const { registry } = await import('./agent-registry.js');
     const sent = registry.sendToAgent(hostname, { type: 'restart_agent' });
@@ -605,7 +676,7 @@ app.get('/api/agents/:hostname/config', async (req, res) => {
   }
 });
 
-// ── Server Management ────────────────────────────────────────────
+// â”€â”€ Server Management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.get('/api/health', async (req, res) => {
   try {
     const dbRes = await pool.query('SELECT 1');
@@ -718,7 +789,7 @@ const keyPath = path.join(certsDir, 'key.pem');
 const certPath = path.join(certsDir, 'cert.pem');
 
 if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
-  console.error('❌ TLS certificates not found. Run `npm run cert:generate` first.');
+  console.error('âŒ TLS certificates not found. Run `npm run cert:generate` first.');
   process.exit(1);
 }
 
@@ -730,7 +801,7 @@ const options = {
 const server = https.createServer(options, app);
 setupWebSockets(server);
 
-// ── Event retention ─────────────────────────────────────────────
+// â”€â”€ Event retention â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Prune raw telemetry older than EVENT_RETENTION_DAYS (default 30)
 // so the events table doesn't grow unboundedly.
 const retentionDays = Number(process.env.EVENT_RETENTION_DAYS) || 30;
@@ -750,10 +821,10 @@ retentionTimer.unref();
 
 const PORT = process.env.PORT || 8443;
 if (!process.env.AGENT_TOKEN) {
-  console.warn('⚠️  AGENT_TOKEN is not set — agent connections to /agent will be REJECTED. Set it in ../.env');
+  console.warn('âš ï¸  AGENT_TOKEN is not set â€” agent connections to /agent will be REJECTED. Set it in ../.env');
 }
 if (!process.env.ADMIN_PASSWORD) {
-  console.warn('⚠️  ADMIN_PASSWORD not set — using insecure default "agentide-dev". Set it in ../.env');
+  console.warn('âš ï¸  ADMIN_PASSWORD not set â€” using insecure default "agentide-dev". Set it in ../.env');
 }
 
 // Collect non-internal IPv4 addresses so we can print the exact URLs an
@@ -771,22 +842,22 @@ function lanAddresses() {
 }
 
 server.listen(PORT, () => {
-  console.log(`🚀 AgentIde Dashboard (TLS) running on https://localhost:${PORT}`);
-  console.log(`🔌 WebSocket Hub running on wss://localhost:${PORT}/dashboard and /agent`);
+  console.log(`ðŸš€ AgentIde Dashboard (TLS) running on https://localhost:${PORT}`);
+  console.log(`ðŸ”Œ WebSocket Hub running on wss://localhost:${PORT}/dashboard and /agent`);
 
   const addrs = lanAddresses();
   // Prefer the hostname: it resolves to whatever IP the host currently has,
   // so it survives roaming Wi-Fi / bridged VMs that jump subnets.
   const hostname = os.hostname();
-  console.log(`🛡️  Agent must connect to the dashboard host, NOT localhost.`);
-  console.log(`      (preferred — survives IP changes)  agentide.exe -install -dashboard wss://${hostname}:${PORT} -token <AGENT_TOKEN>`);
+  console.log(`ðŸ›¡ï¸  Agent must connect to the dashboard host, NOT localhost.`);
+  console.log(`      (preferred â€” survives IP changes)  agentide.exe -install -dashboard wss://${hostname}:${PORT} -token <AGENT_TOKEN>`);
   if (addrs.length === 0) {
-    console.log('      (no external IPv4 interface detected — agents on other hosts cannot reach this server)');
+    console.log('      (no external IPv4 interface detected â€” agents on other hosts cannot reach this server)');
   } else {
     console.log('      or by IP (use if the agent cannot resolve the hostname):');
     for (const ip of addrs) {
       console.log(`      agentide.exe -install -dashboard wss://${ip}:${PORT} -token <AGENT_TOKEN>`);
     }
   }
-  console.log(`🩺 From the agent host, verify reachability with: curl -k https://${hostname}:${PORT}/healthz`);
+  console.log(`ðŸ©º From the agent host, verify reachability with: curl -k https://${hostname}:${PORT}/healthz`);
 });

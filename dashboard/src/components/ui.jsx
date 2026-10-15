@@ -68,3 +68,24 @@ export function Toast({ message, tone = 'info' }) {
     </div>
   );
 }
+
+// Simple toast notification system
+const toastCallbacks = new Set();
+
+export function showToast(toast) {
+  toastCallbacks.forEach(cb => cb(toast));
+}
+
+export function useToast() {
+  const [toasts, setToasts] = React.useState([]);
+  
+  React.useEffect(() => {
+    const callback = (toast) => setToasts(prev => [...prev, { ...toast, id: Date.now() }]);
+    toastCallbacks.add(callback);
+    return () => toastCallbacks.delete(callback);
+  }, []);
+  
+  const dismiss = (id) => setToasts(prev => prev.filter(t => t.id !== id));
+  
+  return { toasts, dismiss };
+}

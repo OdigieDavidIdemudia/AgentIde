@@ -1,5 +1,10 @@
 import { WebSocket } from 'ws';
 
+// How long a superseded socket is left alone before being closed. Long enough
+// for the newest registration to settle in as the socket commands are routed
+// through, short enough that a genuinely replaced socket is still reaped.
+const supersededSocketGraceMs = 2000;
+
 class AgentRegistry {
   constructor() {
     this.agents = new Map();
@@ -20,12 +25,27 @@ class AgentRegistry {
     // later 'close' event races the new registration and — because removeAgent
     // matches on socket identity — can leave the agent online and heartbeating
     // yet unreachable for commands.
+    //
+    // The close is deliberately deferred rather than immediate. Two processes
+    // for the same host (e.g. the Windows service plus a manually launched
+    // agent) share an agent_id; if each new registration instantly closes the
+    // previous socket, the two agents evict each other in a livelock — hundreds
+    // of connects per second, neither able to hold a socket. Delaying the
+    // eviction gives the newest registration time to become the one in use
+    // before any older socket is torn down.
     if (existing && existing.ws !== ws) {
-      try {
-        existing.ws.close();
-      } catch {
-        // Already closing/closed; nothing to do.
-      }
+      const superseded = existing.ws;
+      setTimeout(() => {
+        // Only reap if this socket is still the superseded one; a later
+        // registration may already have replaced it again.
+        if (superseded.readyState === superseded.OPEN) {
+          try {
+            superseded.close();
+          } catch {
+            // Already closing/closed; nothing to do.
+          }
+        }
+      }, supersededSocketGraceMs);
     }
   }
 

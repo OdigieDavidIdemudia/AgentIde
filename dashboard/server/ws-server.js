@@ -10,8 +10,8 @@ const allowedOrigins = (process.env.CORS_ORIGINS || '')
   .filter(Boolean);
 
 export function setupWebSockets(server) {
-  const wssAgents = new WebSocketServer({ noServer: true });
-  const wssDashboard = new WebSocketServer({ noServer: true });
+  const wssAgents = new WebSocketServer({ noServer: true, clientTracking: true, pingInterval: 25000 });
+  const wssDashboard = new WebSocketServer({ noServer: true, clientTracking: true, pingInterval: 25000 });
 
   server.on('upgrade', async (request, socket, head) => {
     const url = new URL(request.url, `https://${request.headers.host || 'localhost'}`);
@@ -142,7 +142,11 @@ export function setupWebSockets(server) {
           await handleFingerprint(msg, auth.agentToken);
           console.log(`🛡️  Agent registered & fingerprinted: ${msg.agent_id}`);
           if (auth.agentToken) {
-            ws.send(JSON.stringify({ type: 'agent_token', token: auth.agentToken }));
+            try {
+              ws.send(JSON.stringify({ type: 'agent_token', token: auth.agentToken }));
+            } catch (err) {
+              console.error('Failed to send agent_token:', err);
+            }
           }
 
           // Offer a self-update when the dashboard has a newer build — but never while
@@ -158,7 +162,11 @@ export function setupWebSockets(server) {
           } else {
             const update = buildUpdateCommand(request.headers.host, agentVersion);
             if (update) {
-              ws.send(JSON.stringify(update));
+              try {
+                ws.send(JSON.stringify(update));
+              } catch (err) {
+                console.error('Failed to send update_agent:', err);
+              }
               console.log(`⬆️  Offered agent update v${update.version} to ${msg.agent_id} (currently v${agentVersion || 'unknown'})`);
               registry.broadcastToBrowsers({
                 type: 'agent_update_offered',
@@ -182,12 +190,16 @@ export function setupWebSockets(server) {
       }
     });
 
-    ws.on('close', () => {
+    ws.on('close', (code, reason) => {
       const agentId = registry.removeAgent(ws);
-      console.log('🛡️  Agent disconnected:', agentId);
+      console.log(`🛡️  Agent disconnected: ${agentId} (code: ${code}, reason: ${reason?.toString() || 'none'})`);
       if (agentId) {
         registry.broadcastToBrowsers({ type: 'agent_disconnected', agent_id: agentId });
       }
+    });
+
+    ws.on('error', (err) => {
+      console.error('WebSocket error:', err);
     });
   });
 }

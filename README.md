@@ -117,7 +117,7 @@ Prebuilt installers (both verify connectivity before reporting success):
 - `agent/msi_output/AgentIDE_Installer_v<version>.exe` â€” interactive wizard with a
   visible connectivity check, also supporting silent mode:
   ```powershell
-  AgentIDE_Installer_v0.4.6.exe /VERYSILENT /DASHBOARDURL="wss://192.168.1.168:8443" /AGENTTOKEN="<AGENT_TOKEN>"
+  AgentIDE_Installer_v0.4.7.exe /VERYSILENT /DASHBOARDURL="wss://192.168.1.168:8443" /AGENTTOKEN="<AGENT_TOKEN>"
   ```
 
 Both are produced from `version.json` by `build_pro.bat`, so the agent binary
@@ -139,13 +139,22 @@ build from another directory.
 
 > Note: self-update requires an agent built from v0.3.0 or later (the first
 > release with the `update_agent` command). Agents older than that need a
-> one-time reinstall of the current build (`0.4.6`); from v0.3.0 onward the
+> one-time reinstall of the current build (`0.4.7`); from v0.3.0 onward the
 > agent keeps itself up to date.
 >
 > To publish a new version: bump `agent/version.json` and rebuild both the agent
 > binary and the installers with `build_pro.bat`. Publishing is therefore a
 > single-version operation â€” never bump `version.json` without rebuilding, or
 > the dashboard will serve a version string that does not match the binary.
+>
+> **v0.4.7** is the first release that actually contains the dashboard-driven
+> module selection (`4eed612`), `stop_assessment` (`2a3f8a7`) and the five
+> tamper modules (`f5fda5c`). Those all landed *after* the `0.4.6` version bump,
+> so `version.json` claimed `0.4.6` for a tree that had never been built or
+> installed. Because the dashboard takes an agent's displayed version from the
+> agents table rather than from the running binary, an installed **v0.4.4** agent
+> reported itself as `0.4.6` and silently ignored the module selection. Treat the
+> version an agent *reports* as unverified; compare it against the deployed exe.
 
 
 ## Security model

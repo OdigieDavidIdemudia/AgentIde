@@ -84,6 +84,10 @@ export function AgentProvider({ children, token }) {
       setWs(socket);
     };
 
+    socket.onerror = (error) => {
+      console.error('[AgentContext] Dashboard WebSocket error:', error?.message || error);
+    };
+
     socket.onmessage = (event) => {
       const msg = JSON.parse(event.data);
       
@@ -152,6 +156,8 @@ export function AgentProvider({ children, token }) {
   const sendCommand = (type, payload) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type, ...payload }));
+    } else {
+      console.warn('[AgentContext] WebSocket not open, cannot send command:', type);
     }
   };
 
