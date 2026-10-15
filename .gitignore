@@ -15,6 +15,7 @@ dashboard/.playwright/
 # ── Compiled binaries & installers ────────────────────────────────────
 agent/agentide.exe
 agent/agentide_linux
+agent/agentide-tray.exe
 agent/AgentIDE_Installer*.exe
 tray/tray.exe
 
