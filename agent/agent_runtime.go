@@ -253,7 +253,11 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 			"downtime_str": killEvent.Downtime.String(),
 			"recovery_num": killEvent.StartCount,
 			"total_kills":  agentState.KillCount,
-			"result":       "AGENT_RECOVERED",
+			// Why this was classified as a kill. Without it a reader cannot
+			// tell an EDR termination from a crash or a power loss.
+			"reason":   killEvent.Reason,
+			"detected": agentState.KillCount,
+			"result":   "AGENT_RECOVERED",
 		})
 	}
 
@@ -261,6 +265,13 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	resilience.StartHeartbeatWriter(fp.Hostname, stopCh)
+
+	// Record a clean shutdown on the way out. Without this marker the next
+	// start cannot distinguish an orderly restart (service update, reboot) from
+	// an EDR killing us, and because the SCM restarts a killed service within
+	// seconds the old heartbeat-gap heuristic saw nothing — which is how a
+	// successful EDR block ended up as a silent zero-result run.
+	defer resilience.MarkCleanExit()
 
 	// Scheduler + Mode dispatch
 	scheduler := core.NewScheduler(profile, days)
@@ -562,9 +573,14 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 					// Register the runner so a stop_assessment command can signal it.
 					currentRunner = runner
 					core.SetStatus("assessing", fmt.Sprintf("Running %s assessment against %s", pending.profile, target.Vendor))
+					// Flag the run so a restart mid-assessment is classified as a
+					// kill. This is the exact case where an EDR terminates us and
+					// the SCM brings us back within seconds.
+					resilience.SetAssessmentRunning(true)
 					if err := runner.Run(); err != nil {
 						logger.Error("Assessment failed", map[string]interface{}{"error": err.Error()})
 					}
+					resilience.SetAssessmentRunning(false)
 					core.SetStatus("connected", "Monitoring passively")
 					// Clear the runner reference so a subsequent stop command
 					// doesn't try to signal a finished runner.
@@ -736,9 +752,13 @@ func autoResumeAssessment(cfg *core.Config, logger *core.Logger, sender transpor
 
 	sched := core.NewScheduler(profile, days)
 	runner := modes.NewActiveRunner(cfg, logger, sched, target, "all", sender, testType)
+	// Same flag as the confirmed path: if this resume is itself killed, the
+	// next start must classify it rather than read it as an idle restart.
+	resilience.SetAssessmentRunning(true)
 	if err := runner.Run(); err != nil {
 		logger.Error("Resumed assessment failed", map[string]interface{}{"error": err.Error()})
 	}
+	resilience.SetAssessmentRunning(false)
 
 	// Always re-enable the vendor and disarm the watchdog, mirroring the
 	// dashboard-confirmed path.
