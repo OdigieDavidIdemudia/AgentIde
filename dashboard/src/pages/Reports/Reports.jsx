@@ -3,6 +3,7 @@ import { useAgentContext } from "../../context/AgentContext.jsx";
 import { apiFetch } from "../../api.js";
 import styles from "./Reports.module.css";
 import { Toast } from "../../components/ui.jsx";
+import { renderStandaloneHtml } from "../../report-template.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -201,7 +202,7 @@ export default function Reports() {
   const [loadingRun, setLoadingRun] = useState(false);
   const [remediations, setRemediations] = useState({});
   const [loadingRemediation, setLoadingRemediation] = useState({});
-  const [isGenerating, setIsGenerating] = useState(false);
+  
   const [toast, setToast] = useState(null);
   const showToast = (nextToast) => {
     setToast(nextToast);
@@ -507,28 +508,24 @@ export default function Reports() {
     }
   };
 
-  const handleGenerateReport = async () => {
-    setIsGenerating(true);
+  const handleExportHtml = () => {
+    // Rendered locally from the same payload the screen shows. This used to go
+    // through /api/generate-report, which asked a language model to write the
+    // document — so the exported severities and findings could differ from the
+    // ones on screen and two exports of one run were not identical.
     try {
-      const response = await apiFetch('/api/generate-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(getReportPayload())
-      });
-      const data = await response.json();
-      if (data.error) throw new Error(data.error);
-      
-      const blob = new Blob([data.html], { type: 'text/html' });
+      const html = renderStandaloneHtml(getReportPayload());
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `agentide-standalone-report-${selected}-${Date.now()}.html`;
+      a.download = `agentide-report-${selected}-${Date.now()}.html`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
-      showToast({ tone: 'error', message: `Report generation failed: ${err.message}` });
-    } finally {
-      setIsGenerating(false);
+      showToast({ tone: 'error', message: `HTML export failed: ${err.message}` });
     }
   };
 
@@ -559,11 +556,11 @@ export default function Reports() {
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
           <button
-            onClick={handleGenerateReport}
-            disabled={isGenerating}
-            style={{ background: 'var(--accent)', border: 'none', color: '#fff', padding: '6px var(--spacing-md)', borderRadius: '4px', cursor: isGenerating ? 'wait' : 'pointer', fontSize: '0.82rem', fontFamily: 'inherit', fontWeight: 'bold' }}
+            onClick={handleExportHtml}
+            title="Self-contained HTML, rendered locally from the findings on screen. Print to PDF from your browser."
+            style={{ background: 'var(--accent)', border: 'none', color: '#fff', padding: '6px var(--spacing-md)', borderRadius: '4px', cursor: 'pointer', fontSize: '0.82rem', fontFamily: 'inherit', fontWeight: 'bold' }}
           >
-            {isGenerating ? "Generating..." : "Generate HTML Report"}
+            Export HTML
           </button>
           <button
             onClick={handleExportMarkdown}
