@@ -277,6 +277,7 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 	switch strings.ToLower(mode) {
 	case "passive":
 		logger.Info("Starting Passive Mode", nil)
+		core.SetStatus("connected", "Monitoring passively")
 
 		// Auto-resume any assessment that was interrupted by an EDR kill.
 		// Runs in the background so dashboard commands (pre-scan requests)
@@ -560,9 +561,11 @@ func runAgent(cfg *core.Config, mode, profile string, days int, module string) {
 
 					// Register the runner so a stop_assessment command can signal it.
 					currentRunner = runner
+					core.SetStatus("assessing", fmt.Sprintf("Running %s assessment against %s", pending.profile, target.Vendor))
 					if err := runner.Run(); err != nil {
 						logger.Error("Assessment failed", map[string]interface{}{"error": err.Error()})
 					}
+					core.SetStatus("connected", "Monitoring passively")
 					// Clear the runner reference so a subsequent stop command
 					// doesn't try to signal a finished runner.
 					currentRunner = nil

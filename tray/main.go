@@ -1,11 +1,28 @@
+// Command agentide-tray is the system tray companion for the AgentIde agent.
+//
+// It is a separate process from the agent service, so it learns what the agent
+// is doing by connecting to the status named pipe the agent serves
+// (\\.\pipe\agentide). The agent publishes one small JSON object per connection
+// and the tray polls, which keeps the agent free of client bookkeeping and
+// lets the tray be started or restarted at any time.
+//
+// Previously this program built a window and a tray context menu but never
+// attached the menu, never updated its status label, and connected to a named
+// pipe the agent never created — so every control was inert. It also pointed
+// "Open Dashboard" at a hardcoded localhost, which is wrong on an endpoint
+// that reports to a remote dashboard.
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"reflect"
+	"strings"
 	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
@@ -13,274 +30,469 @@ import (
 )
 
 const (
-	configPath   = `C:\ProgramData\AgentIde\config.json`
-	dashboardURL = "https://localhost:8443"
+	statusPipe     = `\\.\pipe\agentide`
+	serviceName    = "AgentIde"
+	fallbackDash   = "https://localhost:8443"
+	pollInterval   = 3 * time.Second
+	serviceNameAlt = "AgentIdeGuard"
 )
 
+// configCandidates are the paths the installer and the service have used for
+// config.json, newest layout first. The installer writes the service config
+// next to the executable; older installs used ProgramData.
 var (
-	agentStatus = "Disconnected"
+	configCandidates = []string{
+		`C:\Program Files\AgentIde\config.json`,
+		`C:\ProgramData\AgentIde\config.json`,
+	}
+	logCandidates = []string{
+		`C:\Program Files\AgentIde\agentide.log`,
+		`C:\ProgramData\AgentIde\agentide.log`,
+	}
 )
 
-type MyMainWindow struct {
+// agentStatus mirrors the JSON the agent publishes over the pipe.
+type agentStatus struct {
+	State            string `json:"state"`
+	Message          string `json:"message"`
+	Version          string `json:"version"`
+	Hostname         string `json:"hostname"`
+	DashboardURL     string `json:"dashboard_url"`
+	Since            string `json:"since"`
+	AssessmentActive bool   `json:"assessment_active"`
+	PID              int    `json:"pid"`
+}
+
+// label returns a short human description for the tray and the window.
+func (s agentStatus) label() string {
+	switch s.State {
+	case "connected":
+		if s.Message != "" {
+			return s.Message
+		}
+		return "Connected"
+	case "connecting":
+		return "Connecting to dashboard"
+	case "assessing":
+		if s.Message != "" {
+			return s.Message
+		}
+		return "Assessment in progress"
+	case "disconnected":
+		return "Disconnected from dashboard"
+	case "error":
+		if s.Message != "" {
+			return s.Message
+		}
+		return "Error"
+	default:
+		return "Waiting for agent service"
+	}
+}
+
+// stateColour keeps the status text readable at a glance.
+func (s agentStatus) stateColour() string {
+	switch s.State {
+	case "connected":
+		return "#1a7f37"
+	case "connecting", "assessing":
+		return "#9a6700"
+	default:
+		return "#b42318"
+	}
+}
+
+type mainWindow struct {
 	*walk.MainWindow
-	statusLabel *walk.Label
+	statusLabel  *walk.Label
+	detailLabel  *walk.Label
+	versionLabel *walk.Label
+	trayIcon     *walk.NotifyIcon
 }
 
 func main() {
-	mw := &MyMainWindow{}
+	mw := &mainWindow{}
 
 	if err := (MainWindow{
 		AssignTo: &mw.MainWindow,
-		Title:    "AgentIde Tray",
-		MinSize:  Size{200, 100},
-		Layout:   VBox{},
+		Title:    "AgentIde Agent",
+		MinSize:  Size{Width: 360, Height: 210},
+		Layout:   VBox{Margins: Margins{Left: 10, Top: 10, Right: 10, Bottom: 10}, Spacing: 8},
 		Children: []Widget{
 			Label{
 				Text:      "AgentIde EDR Assessment Agent",
-				Alignment: AlignHCenterVNear,
 				Font:      Font{PointSize: 10, Bold: true},
+				Alignment: AlignHCenterVNear,
 			},
-			Composite{
-				Layout: HBox{},
+			HSplitter{
+				MinSize: Size{Width: 340, Height: 4},
 				Children: []Widget{
-					Label{Text: "Status:"},
-					Label{AssignTo: &mw.statusLabel, Text: "Disconnected"},
+					Label{Text: ""},
 				},
 			},
 			Composite{
-				Layout: HBox{},
+				Layout: HBox{Margins: Margins{Left: 4, Top: 4, Right: 4, Bottom: 4}, Spacing: 8},
 				Children: []Widget{
-					PushButton{
-						Text:      "Open Dashboard",
-						OnClicked: mw.openDashboard,
-					},
-					PushButton{
-						Text:      "Open Config",
-						OnClicked: mw.openConfig,
-					},
+					Label{Text: "Status:", MinSize: Size{Width: 70, Height: 0}},
+					Label{AssignTo: &mw.statusLabel, Text: "Waiting for agent service..."},
 				},
 			},
 			Composite{
-				Layout: HBox{},
+				Layout: HBox{Margins: Margins{Left: 4, Top: 4, Right: 4, Bottom: 4}, Spacing: 8},
 				Children: []Widget{
-					PushButton{
-						Text:      "Open Logs",
-						OnClicked: mw.openLogs,
-					},
-					PushButton{
-						Text:      "Restart Agent",
-						OnClicked: mw.restartAgent,
-					},
+					Label{Text: "", MinSize: Size{Width: 70, Height: 0}},
+					Label{AssignTo: &mw.detailLabel, Text: ""},
 				},
 			},
 			Composite{
-				Layout: HBox{},
+				Layout: HBox{Margins: Margins{Left: 4, Top: 4, Right: 4, Bottom: 4}, Spacing: 8},
 				Children: []Widget{
-					PushButton{
-						Text:      "Service Status",
-						OnClicked: mw.showServiceStatus,
-					},
-					PushButton{
-						Text:      "Quit Tray",
-						OnClicked: func() { mw.Close() },
-					},
+					Label{Text: "", MinSize: Size{Width: 70, Height: 0}},
+					Label{AssignTo: &mw.versionLabel, Text: ""},
+				},
+			},
+			Composite{
+				Layout: HBox{Margins: Margins{Left: 4, Top: 12, Right: 4, Bottom: 4}, Spacing: 8},
+				Children: []Widget{
+					PushButton{Text: "Open Dashboard", OnClicked: mw.openDashboard},
+					PushButton{Text: "Open Config", OnClicked: mw.openConfig},
+				},
+			},
+			Composite{
+				Layout: HBox{Margins: Margins{Left: 4, Top: 4, Right: 4, Bottom: 4}, Spacing: 8},
+				Children: []Widget{
+					PushButton{Text: "Open Logs", OnClicked: mw.openLogs},
+					PushButton{Text: "Restart Agent", OnClicked: mw.restartAgent},
+				},
+			},
+			Composite{
+				Layout: HBox{Margins: Margins{Left: 4, Top: 4, Right: 4, Bottom: 12}, Spacing: 8},
+				Children: []Widget{
+					PushButton{Text: "Service Status", OnClicked: mw.showServiceStatus},
+					PushButton{Text: "Hide", OnClicked: func() { hideToTray(mw) }},
 				},
 			},
 		},
 	}.Create()); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create UI: %v\n", err)
+		fmt.Fprintf(os.Stderr, "failed to create UI: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Create system tray icon
-	createTray(mw)
+	mw.createTray()
 
-	// Start connection to agent
-	go connectToAgent()
+	// Poll the agent's status pipe in the background and refresh the UI.
+	go mw.pollStatus()
 
 	mw.Run()
 }
 
-func (mw *MyMainWindow) openDashboard() {
-	openURL(dashboardURL)
+// pollStatus connects to the agent's status pipe on a timer. A failed connect
+// is normal (the service may be stopped), so it is reported as a state rather
+// than treated as an error.
+func (mw *mainWindow) pollStatus() {
+	for {
+		st, err := readAgentStatus()
+		if err != nil {
+			st = agentStatus{State: "disconnected", Message: "Agent service not responding"}
+		}
+		mw.applyStatus(st)
+		time.Sleep(pollInterval)
+	}
 }
 
-func (mw *MyMainWindow) openConfig() {
-	openConfig()
+func (mw *mainWindow) applyStatus(st agentStatus) {
+	text := st.label()
+	detail := st.Hostname
+	if detail == "" {
+		detail = "hostname unknown"
+	}
+	if st.DashboardURL != "" {
+		detail += "  ·  " + st.DashboardURL
+	}
+	version := "version unknown"
+	if st.Version != "" {
+		version = "v" + st.Version
+	}
+	if st.AssessmentActive {
+		version += "  ·  assessment running"
+	}
+
+	mw.Synchronize(func() {
+		if mw.statusLabel != nil {
+			if err := mw.statusLabel.SetText(text); err != nil {
+				fmt.Printf("status label: %v\n", err)
+			}
+		}
+		if mw.detailLabel != nil {
+			mw.detailLabel.SetText(detail)
+		}
+		if mw.versionLabel != nil {
+			mw.versionLabel.SetText(version)
+		}
+	})
+
+	if mw.trayIcon != nil {
+		mw.trayIcon.SetToolTip("AgentIde - " + text)
+	}
 }
 
-func (mw *MyMainWindow) openLogs() {
-	openLogs()
-}
-
-func (mw *MyMainWindow) restartAgent() {
-	restartAgent()
-}
-
-func (mw *MyMainWindow) showServiceStatus() {
-	showServiceStatus()
-}
-
-var (
-	trayIcon *walk.NotifyIcon
-	trayMenu *walk.Menu
-)
-
-func createTray(mw *MyMainWindow) {
-	var err error
-	trayIcon, err = walk.NewNotifyIcon(mw.MainWindow)
+// readAgentStatus connects to the named pipe, reads one JSON line and returns
+// it. The agent writes a single newline-terminated object then closes.
+func readAgentStatus() (agentStatus, error) {
+	path, err := windows.UTF16PtrFromString(statusPipe)
 	if err != nil {
-		fmt.Printf("Failed to create tray icon: %v\n", err)
+		return agentStatus{}, err
+	}
+
+	h, err := windows.CreateFile(
+		path,
+		windows.GENERIC_READ|windows.GENERIC_WRITE,
+		0, nil,
+		windows.OPEN_EXISTING,
+		0,
+		0,
+	)
+	if err != nil {
+		return agentStatus{}, err
+	}
+	defer windows.CloseHandle(h)
+
+	buf := make([]byte, 4096)
+	var n uint32
+	var ov windows.Overlapped
+	// The pipe server writes immediately and closes; a plain ReadFile with an
+	// overlapped handle completes synchronously in practice for a message pipe
+	// of this size. Guard with a read deadline via CancelIoEx on timeout.
+	done := make(chan error, 1)
+	go func() {
+		e := windows.ReadFile(h, buf, &n, &ov)
+		done <- e
+	}()
+
+	select {
+	case e := <-done:
+		if e != nil {
+			return agentStatus{}, e
+		}
+	case <-time.After(3 * time.Second):
+		windows.CancelIoEx(h, nil)
+		return agentStatus{}, fmt.Errorf("timeout reading status pipe")
+	}
+
+	var st agentStatus
+	line := strings.TrimSpace(string(buf[:n]))
+	if err := json.Unmarshal([]byte(line), &st); err != nil {
+		return agentStatus{}, err
+	}
+	return st, nil
+}
+
+// createTray builds the notification icon and attaches the context menu.
+//
+// walk.NotifyIcon keeps its contextMenu field unexported and offers no
+// SetContextMenu in this version, but walk's property reflection can still set
+// it — without this the tray icon appeared but right-clicking did nothing,
+// which is what the previous build shipped.
+func (mw *mainWindow) createTray() {
+	icon, err := walk.NewNotifyIcon(mw.MainWindow)
+	if err != nil {
 		return
 	}
-	trayIcon.SetToolTip("AgentIde - Disconnected")
-	trayIcon.SetVisible(true)
+	mw.trayIcon = icon
+	icon.SetToolTip("AgentIde - Waiting for agent service")
+	icon.SetVisible(true)
 
-	trayMenu, _ = walk.NewMenu()
+	menu, err := walk.NewMenu()
+	if err != nil {
+		return
+	}
 
-	// Status item (disabled)
-	statusAction := walk.NewAction()
-	statusAction.SetText("Status: Disconnected")
-	statusAction.SetEnabled(false)
-	trayMenu.Actions().Add(statusAction)
+	addAction(menu, "Open Dashboard", mw.openDashboard, true)
+	addAction(menu, "Open Config", mw.openConfig, true)
+	addAction(menu, "Open Logs", mw.openLogs, true)
+	menu.Actions().Add(walk.NewSeparatorAction())
+	addAction(menu, "Show AgentIde", func() { mw.restore() }, true)
+	addAction(menu, "Restart Agent", mw.restartAgent, true)
+	addAction(menu, "Service Status", mw.showServiceStatus, true)
+	menu.Actions().Add(walk.NewSeparatorAction())
+	addAction(menu, "Quit Tray", func() { walk.App().Exit(0) }, true)
 
-	trayMenu.Actions().Add(walk.NewSeparatorAction())
+	// Attach the menu. walk.NotifyIcon keeps contextMenu unexported and provides
+	// no setter or reflection helper, so it is written directly. Without this the
+	// tray icon rendered but right-clicking did nothing, which is what the previous
+	// build shipped.
+	if err := setNotifyIconMenu(icon, menu); err != nil {
+		// Left-click still restores the window, so the app stays usable.
+		fmt.Printf("could not attach tray menu: %v\n", err)
+	}
 
-	// Dashboard
-	dashboardAction := walk.NewAction()
-	dashboardAction.SetText("Open Dashboard")
-	dashboardAction.Triggered().Attach(func() { openURL(dashboardURL) })
-	trayMenu.Actions().Add(dashboardAction)
-
-	// Config
-	configAction := walk.NewAction()
-	configAction.SetText("Open Config")
-	configAction.Triggered().Attach(func() { openConfig() })
-	trayMenu.Actions().Add(configAction)
-
-	// Logs
-	logsAction := walk.NewAction()
-	logsAction.SetText("Open Logs")
-	logsAction.Triggered().Attach(func() { openLogs() })
-	trayMenu.Actions().Add(logsAction)
-
-	trayMenu.Actions().Add(walk.NewSeparatorAction())
-
-	// Restart
-	restartAction := walk.NewAction()
-	restartAction.SetText("Restart Agent")
-	restartAction.Triggered().Attach(func() { restartAgent() })
-	trayMenu.Actions().Add(restartAction)
-
-	// Service Status
-	statusAction2 := walk.NewAction()
-	statusAction2.SetText("Service Status")
-	statusAction2.Triggered().Attach(func() { showServiceStatus() })
-	trayMenu.Actions().Add(statusAction2)
-
-	trayMenu.Actions().Add(walk.NewSeparatorAction())
-
-	// Quit
-	quitAction := walk.NewAction()
-	quitAction.SetText("Quit Tray")
-	quitAction.Triggered().Attach(func() { walk.App().Exit(0) })
-	trayMenu.Actions().Add(quitAction)
-
-	// Note: walk.NotifyIcon doesn't have SetContextMenu in this version
-	trayIcon.SetToolTip("AgentIde - Disconnected")
-	trayIcon.SetVisible(true)
+	icon.MouseDown().Attach(func(x, y int, button walk.MouseButton) {
+		if button == walk.LeftButton {
+			mw.restore()
+		}
+	})
 }
 
-// IPC connection to agent service
-func connectToAgent() {
-	for {
-		// Wait for pipe to be available
-		pipeHandle, err := windows.CreateFile(
-			syscall.StringToUTF16Ptr(`\\.\pipe\agentide`),
-			windows.GENERIC_READ|windows.GENERIC_WRITE,
-			0, nil,
-			windows.OPEN_EXISTING,
-			windows.FILE_FLAG_OVERLAPPED,
-			0,
-		)
+// setNotifyIconMenu writes walk.NotifyIcon's unexported contextMenu field.
+//
+// walk exposes no exported setter and no SetPropertyValue helper in this
+// version, and the field is not settable through normal reflection, so this
+// uses unsafe to reach it. It is the only way to make the tray icon's
+// right-click menu work at all; the alternative is a tray icon that silently
+// ignores clicks.
+func setNotifyIconMenu(icon *walk.NotifyIcon, menu *walk.Menu) error {
+	v := reflect.ValueOf(icon).Elem().FieldByName("contextMenu")
+	if !v.IsValid() {
+		return fmt.Errorf("walk.NotifyIcon has no contextMenu field in this version")
+	}
+	reflect.NewAt(v.Type(), unsafe.Pointer(v.UnsafeAddr())).
+		Elem().
+		Set(reflect.ValueOf(menu))
+	return nil
+}
 
-		if err != nil {
-			updateStatus("Disconnected")
-			time.Sleep(5 * time.Second)
-			continue
-		}
+func addAction(menu *walk.Menu, text string, fn func(), enabled bool) {
+	a := walk.NewAction()
+	a.SetText(text)
+	a.SetEnabled(enabled)
+	a.Triggered().Attach(fn)
+	menu.Actions().Add(a)
+}
 
-		// Successfully connected
-		updateStatus("Connected")
+func hideToTray(mw *mainWindow) {
+	mw.SetVisible(false)
+}
 
-		// Read from pipe
-		buf := make([]byte, 4096)
-		var overlapped windows.Overlapped
-		for {
-			var n uint32
-			err := windows.ReadFile(pipeHandle, buf, &n, &overlapped)
-			if err != nil {
-				break
+func (mw *mainWindow) restore() {
+	// Form has no portable SetForeground in walk, so making the window visible
+	// is the whole of "restore" here. On a multi-monitor setup the operator may
+	// still need to alt-tab, which is why the tray icon is also clickable.
+	mw.SetVisible(true)
+}
+
+// dashboardURL returns the URL the agent actually reports to, so "Open
+// Dashboard" works on an endpoint pointing at a remote dashboard. Falls back
+// to localhost only when no config can be read.
+func dashboardURL() string {
+	if path, ok := firstExisting(configCandidates); ok {
+		if data, err := os.ReadFile(path); err == nil {
+			var cfg struct {
+				DashboardURL string `json:"dashboard_url"`
 			}
-			if n > 0 {
-				handlePipeMessage(buf[:n])
+			if json.Unmarshal(data, &cfg) == nil && strings.TrimSpace(cfg.DashboardURL) != "" {
+				return normaliseDashboardURL(cfg.DashboardURL)
 			}
 		}
+	}
+	return fallbackDash
+}
 
-		windows.CloseHandle(pipeHandle)
-		time.Sleep(2 * time.Second)
+// normaliseDashboardURL converts a ws:// or wss:// agent URL into the https://
+// origin a browser can open.
+func normaliseDashboardURL(u string) string {
+	switch {
+	case strings.HasPrefix(u, "wss://"):
+		return "https://" + strings.TrimPrefix(u, "wss://")
+	case strings.HasPrefix(u, "ws://"):
+		return "http://" + strings.TrimPrefix(u, "ws://")
+	default:
+		return u
 	}
 }
 
-func handlePipeMessage(data []byte) {
-	// Parse JSON message from agent
-	// Update status based on message type
+func firstExisting(paths []string) (string, bool) {
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			return p, true
+		}
+	}
+	return "", false
 }
 
-func updateStatus(s string) {
-	fmt.Printf("Status: %s\n", s)
+func (mw *mainWindow) openDashboard() {
+	openURL(dashboardURL())
+}
+
+func (mw *mainWindow) openConfig() {
+	if path, ok := firstExisting(configCandidates); ok {
+		runVisible("notepad.exe", path)
+		return
+	}
+	message("Config not found", "Could not find config.json in:\n"+strings.Join(configCandidates, "\n"))
+}
+
+func (mw *mainWindow) openLogs() {
+	if path, ok := firstExisting(logCandidates); ok {
+		runVisible("notepad.exe", path)
+		return
+	}
+	message("Log not found", "Could not find agentide.log in:\n"+strings.Join(logCandidates, "\n"))
+}
+
+// restartAgent restarts the service. This needs elevation, so it is invoked
+// through a PowerShell elevation prompt rather than silently failing.
+func (mw *mainWindow) restartAgent() {
+	if !confirm("Restart agent?", "This stops and starts the "+serviceName+" service.\nThe agent will briefly stop reporting to the dashboard.") {
+		return
+	}
+	// sc.exe needs admin. Use Start-Process -Verb RunAs so the UAC prompt is
+	// explicit rather than the command silently failing with access denied.
+	script := fmt.Sprintf(
+		`Start-Process -Verb RunAs -Wait -FilePath sc.exe -ArgumentList 'stop','%s'; Start-Sleep -Seconds 2; Start-Process -Verb RunAs -Wait -FilePath sc.exe -ArgumentList 'start','%s'`,
+		serviceName, serviceName)
+	runHiddenElevated(script)
+}
+
+func (mw *mainWindow) showServiceStatus() {
+	out, err := exec.Command("sc.exe", "query", serviceName).CombinedOutput()
+	title := serviceName + " service"
+	if err != nil {
+		message(title, "sc.exe query failed:\n"+err.Error())
+		return
+	}
+	extra := ""
+	if guardOut, gErr := exec.Command("sc.exe", "query", serviceNameAlt).CombinedOutput(); gErr == nil {
+		extra = "\n\n" + serviceNameAlt + ":\n" + strings.TrimSpace(string(guardOut))
+	}
+	message(title, strings.TrimSpace(string(out))+extra)
 }
 
 func openURL(url string) {
-	cmd := exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", url)
-	cmd.Run()
+	exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", url).Start()
 }
 
-func openConfig() {
-	configPath := `C:\ProgramData\AgentIde\config.json`
-	cmd := exec.Command("notepad.exe", configPath)
-	cmd.Run()
+func runVisible(name string, args ...string) {
+	exec.Command(name, args...).Start()
 }
 
-func openLogs() {
-	logPath := `C:\ProgramData\AgentIde\agentide.log`
-	cmd := exec.Command("notepad.exe", logPath)
-	cmd.Run()
+// runHiddenElevated runs a PowerShell snippet with a UAC elevation prompt.
+func runHiddenElevated(script string) {
+	cmd := exec.Command("powershell.exe", "-NoProfile", "-Command", script)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	if err := cmd.Start(); err != nil {
+		message("Restart failed", err.Error())
+	}
 }
 
-func restartAgent() {
-	cmd := exec.Command("sc.exe", "stop", "AgentIde")
-	cmd.Run()
-	time.Sleep(2 * time.Second)
-	cmd = exec.Command("sc.exe", "start", "AgentIde")
-	cmd.Run()
+func message(title, body string) {
+	ps := fmt.Sprintf(
+		"Add-Type -AssemblyName System.Windows.Forms; "+
+			"[System.Windows.Forms.MessageBox]::Show(@'\n%s\n'@,'%s','OK','Information') | Out-Null",
+		strings.ReplaceAll(body, "'", "''"), strings.ReplaceAll(title, "'", "''"))
+	runHiddenElevated(ps)
 }
 
-func showServiceStatus() {
-	cmd := exec.Command("sc.exe", "query", "AgentIde")
-	output, _ := cmd.CombinedOutput()
+func confirm(title, body string) bool {
+	ps := fmt.Sprintf(
+		"Add-Type -AssemblyName System.Windows.Forms; "+
+			"$r=[System.Windows.Forms.MessageBox]::Show(@'\n%s\n'@,'%s','YesNo','Question'); "+
+			"if($r -eq 'Yes'){exit 0}else{exit 1}",
+		strings.ReplaceAll(body, "'", "''"), strings.ReplaceAll(title, "'", "''"))
 
-	psScript := fmt.Sprintf(`
-	Add-Type -AssemblyName System.Windows.Forms
-	[System.Windows.Forms.MessageBox]::Show(%q, "AgentIde Service Status", "OK", "Information")
-	`, string(output))
-	exec.Command("powershell.exe", "-Command", psScript).Run()
-}
-
-func showError(title, msg string) {
-	psScript := fmt.Sprintf(`
-	Add-Type -AssemblyName System.Windows.Forms
-	[System.Windows.Forms.MessageBox]::Show(%q, %q, "OK", "Error")
-	`, msg, title)
-	exec.Command("powershell.exe", "-Command", psScript).Run()
+	cmd := exec.Command("powershell.exe", "-NoProfile", "-Command", ps)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	if err := cmd.Run(); err != nil {
+		return false
+	}
+	return cmd.ProcessState.ExitCode() == 0
 }

@@ -253,6 +253,17 @@ func main() {
 		"profile": *profileFlag,
 	})
 
+	// Seed the tray-visible identity. The hostname is filled in again below
+	// once the fingerprint is collected, which is authoritative.
+	core.InitStatus(version, "", cfg.DashboardURL)
+
+	// Publish status for the tray companion app. The tray runs as a separate
+	// process and can only know what the agent is doing if the agent tells it,
+	// so the pipe is served for the lifetime of this process.
+	pipeStop := make(chan struct{})
+	defer close(pipeStop)
+	core.StartStatusPipe(pipeStop)
+
 	// Fingerprint
 	fp, err := fingerprint.Collect()
 	if err != nil {
@@ -267,6 +278,8 @@ func main() {
 		fmt.Printf("│  Kernel    : %s\n", fp.KernelBuild)
 		fmt.Printf("│  Arch      : %s\n", fp.Arch)
 		fmt.Printf("└───────────────────────────────────────────────\n\n")
+		// The fingerprint is authoritative for identity; seed the tray with it.
+		core.InitStatus(version, fp.Hostname, cfg.DashboardURL)
 	}
 
 	// Discovery

@@ -261,6 +261,7 @@ func (c *Client) connectLoop() {
 
 		connectedAt := time.Now()
 		c.logger.Info("Transport: connected to dashboard — agent is reporting", nil)
+		core.SetStatus("connected", "Reporting to dashboard")
 
 		// Re-announce the endpoint on every connect. The dashboard replies to a
 		// fingerprint with an update command when it has a newer build, so a
@@ -284,6 +285,7 @@ func (c *Client) connectLoop() {
 		c.logger.Warn("Transport: connection lost, reconnecting...", map[string]interface{}{
 			"connected_for": time.Since(connectedAt).Truncate(time.Millisecond).String(),
 		})
+		core.SetStatus("connecting", "Reconnecting to dashboard")
 
 		// Flap backoff. A connection that drops almost immediately means the
 		// dashboard is rejecting us repeatedly — most often because a second
