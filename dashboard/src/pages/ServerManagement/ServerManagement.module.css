@@ -23,8 +23,8 @@
 
 .card {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: var(--border-width) solid var(--border);
+  border-radius: 0;
   padding: var(--spacing-lg);
 }
 
@@ -114,10 +114,10 @@
 
 .input {
   padding: var(--spacing-xs) var(--spacing-sm);
-  border: 1px solid var(--border);
+  border: var(--border-width) solid var(--border);
   background: var(--surface-raised);
   color: var(--text-primary);
-  border-radius: 4px;
+  border-radius: 0;
   font-family: inherit;
   font-size: 0.85rem;
 }
@@ -137,8 +137,8 @@
   margin: 0;
   padding: var(--spacing-md);
   background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  border: var(--border-width) solid var(--border);
+  border-radius: 0;
   font-size: 0.75rem;
   line-height: 1.6;
   color: var(--text-primary);

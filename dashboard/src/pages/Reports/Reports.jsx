@@ -333,17 +333,20 @@ export default function Reports() {
     return findings;
   }, [state.events, selected]);
 
-  // Summary counts come from the selected run's persisted results, so they
-  // describe exactly one labelled assessment instead of every run ever made.
+  // Summary counts come from the selected run's findings, so they describe
+  // exactly one labelled assessment instead of every run ever made.
+  //
+  // Findings carry `result` and `severity`, not the raw `action`/`passed` pair
+  // the results rows used, so the verdict helpers are applied to `result`.
   // Only real verdicts count: an INFO ack (a restart, a self-update) is not a
   // module that was tested, so including it would post a phantom failure.
-  const runVerdicts = runResults.filter((r) => !NON_VERDICT_RESULTS.has(r.action));
+  const runVerdicts = runResults.filter((r) => !NON_VERDICT_RESULTS.has(r.result));
   const totalModules = runVerdicts.length;
-  const passedModules = runVerdicts.filter((r) => isVerdictPass(r.action)).length;
-  const failedModules = runVerdicts.filter((r) => !isVerdictPass(r.action)).length;
+  const passedModules = runVerdicts.filter((r) => isVerdictPass(r.result)).length;
+  const failedModules = runVerdicts.filter((r) => !isVerdictPass(r.result)).length;
   const totalTampers = tamperEvents.length;
 
-  // MITRE Calculation - use module results and tamper events
+  // MITRE Calculation - use module findings and tamper events
   const mitreStats = useMemo(() => {
     const stats = {};
     const addStat = (mitreId, isPass) => {
@@ -353,17 +356,17 @@ export default function Reports() {
       stats[tactic].total += 1;
       if (isPass) stats[tactic].passed += 1;
     };
-    
-    // Use the selected run's results for MITRE stats. Informational acks are
+
+    // Use the selected run's findings for MITRE stats. Informational acks are
     // skipped so they cannot register as a failed technique.
     runVerdicts.forEach((r) => {
-      addStat(r.mitre, isVerdictPass(r.action));
+      addStat(r.mitre, isVerdictPass(r.result));
     });
     tamperEvents.forEach(e => {
       addStat(e.payload?.mitre, true); // tamper events are BLOCKED_BY_EDR = pass
     });
     return stats;
-  }, [runResults, tamperEvents]);
+  }, [runVerdicts, tamperEvents]);
 
   if (agentIds.length === 0) {
     return (
@@ -385,8 +388,8 @@ export default function Reports() {
     
     const testTypes = [...new Set(allAssessments.map(a => a.test_type).filter(Boolean))];
     const profiles = [...new Set(allAssessments.map(a => a.profile).filter(Boolean))];
-    // Modules actually executed in this run, taken from the persisted results.
-    const executedModules = [...new Set(runResults.map(r => r.module_name).filter(Boolean))];
+    // Modules actually executed in this run, taken from the returned findings.
+    const executedModules = [...new Set(runResults.map(r => r.module).filter(Boolean))];
     const vendors = [...new Set(state.events.filter(e => e.agent_id === selected && e.payload?.vendor).map(e => e.payload.vendor))];
     const dateRange = activeRun?.started_at
       ? { first: activeRun.started_at, last: activeRun.completed_at || activeRun.started_at }
@@ -424,20 +427,24 @@ export default function Reports() {
         ...sessionFindings.filter(f => f.result === 'BLOCKED' || f.result === 'BLOCKED_BY_EDR'),
         ...tamperEvents.map(e => ({ ...e.payload, timestamp: e.timestamp, result: 'AGENT_RECOVERED' }))
       ],
-      // Persisted results, not the volatile live-event buffer. Exporting from
+      // Persisted findings, not the volatile live-event buffer. Exporting from
       // live events meant a page reload produced an empty module_results for a
-      // run whose results were visible on screen.
+      // run whose results were visible on screen. Severity and the
+      // observation/impact/recommendation blocks travel with the export so a
+      // generated document is grounded in the same derived data the screen
+      // shows, rather than having a model re-invent severity from the detail
+      // text.
       module_results: runResults.map(r => ({
-        module: r.module_name,
-        result: r.action,
-        passed: r.passed,
-        detail: r.detail,
+        module: r.module,
+        result: r.result,
+        severity: r.severity,
+        is_finding: r.isFinding,
+        detail: r.observation,
+        impact: r.impact,
+        recommendation: r.recommendation,
         mitre: r.mitre,
-        duration_ms: r.elapsed_ms,
-        test_type: r.test_type,
-        notes: r.notes,
-        artifacts: r.artifacts,
-        timestamp: r.recorded_at,
+        duration_ms: r.elapsedMs,
+        timestamp: r.executedAt,
       })),
       session_findings: sessionFindings.filter(f => f.result !== 'BLOCKED' && f.result !== 'BLOCKED_BY_EDR'),
     };

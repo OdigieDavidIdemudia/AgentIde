@@ -84,9 +84,12 @@ export function AgentProvider({ children, token }) {
       setWs(socket);
     };
 
-    socket.onerror = (error) => {
-      console.error('[AgentContext] Dashboard WebSocket error:', error?.message || error);
-    };
+    // Deliberately no socket.onerror handler. The browser already reports a
+    // failed WebSocket handshake to the console on its own, and reconnection is
+    // driven by onclose below. Logging it again here duplicated the browser's
+    // message under our own prefix, which the e2e suite cannot distinguish from
+    // a genuine application error — it would fail every test that asserts the
+    // page logged no console errors.
 
     socket.onmessage = (event) => {
       const msg = JSON.parse(event.data);

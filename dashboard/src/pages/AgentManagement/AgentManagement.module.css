@@ -22,7 +22,7 @@
   justify-content: center;
   padding: var(--spacing-2xl);
   border: 1px dashed var(--border);
-  border-radius: 4px;
+  border-radius: 0;
   text-align: center;
 }
 
@@ -53,7 +53,7 @@
 
 .status {
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: 0;
   font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -78,10 +78,10 @@
 .btn {
   padding: 4px 10px;
   font-size: 0.75rem;
-  border: 1px solid var(--border);
+  border: var(--border-width) solid var(--border);
   background: var(--surface-raised);
   color: var(--text-secondary);
-  border-radius: 3px;
+  border-radius: 0;
   cursor: pointer;
   font-family: inherit;
   transition: all 150ms;
@@ -116,8 +116,8 @@
 
 .modal {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: var(--border-width) solid var(--border);
+  border-radius: 0;
   width: 90%;
   max-width: 700px;
   max-height: 80vh;

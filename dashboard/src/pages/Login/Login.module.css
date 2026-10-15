@@ -21,7 +21,7 @@
   height: 48px;
   background-color: var(--accent);
   color: var(--n-900);
-  border-radius: 4px;
+  border-radius: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -60,7 +60,7 @@
   border: var(--border-width) solid var(--border);
   color: var(--text-primary);
   padding: var(--spacing-sm);
-  border-radius: 4px;
+  border-radius: 0;
   font-family: var(--font-body);
   font-size: var(--font-base);
 }
@@ -74,7 +74,7 @@
   background-color: rgba(255, 77, 77, 0.1);
   color: var(--fail);
   padding: var(--spacing-sm);
-  border-radius: 4px;
+  border-radius: 0;
   font-size: var(--font-sm);
   text-align: center;
   border: var(--border-width) solid var(--fail);

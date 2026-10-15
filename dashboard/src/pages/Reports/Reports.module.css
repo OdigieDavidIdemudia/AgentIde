@@ -1,4 +1,4 @@
-﻿.container {
+.container {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg);
@@ -54,7 +54,7 @@
   justify-content: center;
   padding: var(--spacing-2xl);
   border: 1px dashed var(--border);
-  border-radius: 4px;
+  border-radius: 0;
   text-align: center;
 }
 
@@ -73,8 +73,8 @@
 
 .summaryCard {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
+  border: var(--border-width) solid var(--border);
+  border-radius: 0;
   padding: var(--spacing-md) var(--spacing-lg);
 }
 
@@ -112,7 +112,7 @@
   border-bottom: 1px solid var(--border);
 }
 
-/* Findings — structured cards replacing the flat grid rows.
+/* Findings � structured cards replacing the flat grid rows.
    Each finding reads as: numbered header + severity, then Observation /
    Impact / Recommendation blocks, matching the consulting report format. */
 .findingCard {
@@ -122,8 +122,8 @@
   padding: var(--spacing-md);
   margin-bottom: var(--spacing-md);
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  border: var(--border-width) solid var(--border);
+  border-radius: 0;
 }
 
 .findingHeader {
@@ -162,36 +162,43 @@
   border-bottom: none;
 }
 
+/* Status badges — same hues as before, but as solid blocks with a hard border
+   instead of a translucent tint. A tinted 15% fill over a surface is the
+   softest thing in the old design and read as neither pixel nor brutalist. */
 .badge {
   display: inline-block;
-  padding: 2px var(--spacing-xs);
-  border-radius: 3px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.7rem;
+  padding: 3px var(--spacing-xs);
+  border-radius: 0;
+  border: var(--border-width) solid var(--border);
+  font-family: 'Silkscreen', 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
-.badgePASS   { background: rgba(6,214,160,0.15); color: #06d6a0; border: 1px solid rgba(6,214,160,0.3); }
-.badgeFAIL   { background: rgba(239,71,111,0.15); color: #ef476f; border: 1px solid rgba(239,71,111,0.3); }
-.badgeBLOCKED{ background: rgba(255,0,85,0.15);   color: #ff0055; border: 1px solid rgba(255,0,85,0.3); }
-.badgeFIXED  { background: rgba(255,209,102,0.15);color: #ffd166; border: 1px solid rgba(255,209,102,0.3); }
-.badgeINFO   { background: rgba(150,150,150,0.1);  color: var(--text-secondary); border: 1px solid var(--border); }
+.badgePASS   { background: #06d6a0; color: var(--n-900); }
+.badgeFAIL   { background: #ef476f; color: #ffffff; }
+.badgeBLOCKED{ background: #ff0055; color: #ffffff; }
+.badgeFIXED  { background: #ffd166; color: var(--n-900); }
+.badgeINFO   { background: var(--n-300); color: var(--n-900); }
 
 .typeBadge {
   display: inline-block;
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: 0.68rem;
-  font-weight: 600;
+  padding: 3px 6px;
+  border-radius: 0;
+  border: var(--border-width) solid var(--border);
+  font-family: 'Silkscreen', 'JetBrains Mono', monospace;
+  font-size: 0.6rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
 }
 
-.typeWhitebox { background: rgba(0,200,255,0.1); color: #00c8ff; border: 1px solid rgba(0,200,255,0.2); }
-.typeBlackbox { background: rgba(255,140,0,0.1); color: #ff8c00; border: 1px solid rgba(255,140,0,0.2); }
-.typeInternal { background: rgba(150,150,150,0.1); color: var(--n-500); border: 1px solid var(--border); }
+.typeWhitebox { background: #00c8ff; color: var(--n-900); }
+.typeBlackbox { background: #ff8c00; color: var(--n-900); }
+.typeInternal { background: var(--n-300); color: var(--n-900); }
 
 .findingTitle {
   color: var(--text-primary);

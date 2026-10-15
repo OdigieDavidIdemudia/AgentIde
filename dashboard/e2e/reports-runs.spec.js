@@ -8,7 +8,7 @@ import { test, expect } from '@playwright/test';
  * into one list and there was no way to tell which assessment you were
  * reading. It now loads persisted runs from
  * /api/agents/:hostname/assessments and scopes to one via
- * /api/assessments/:id/results.
+ * /api/assessments/:id/findings.
  */
 
 const RUNS = [
@@ -37,20 +37,78 @@ const RUNS = [
   },
 ];
 
-const RESULTS_BY_RUN = {
-  'aaaaaaaa-1111-2222-3333-444444444444': [
-    { id: 'r1', module_name: 'malware', action: 'PASS', passed: true, mitre: 'T1204.002', detail: 'EICAR execution blocked', elapsed_ms: 15094, test_type: 'blackbox', notes: 'ok', artifacts: [], recorded_at: '2026-10-13T10:10:21.000Z' },
-    { id: 'r2', module_name: 'identity', action: 'FAIL', passed: false, mitre: 'T1110.003', detail: 'No alert raised for repeated failed logins', elapsed_ms: 2240, test_type: 'blackbox', notes: 'ok', artifacts: [], recorded_at: '2026-10-13T10:11:01.000Z' },
-    { id: 'r3', module_name: 'network', action: 'PASS', passed: true, mitre: 'T1071.001', detail: 'Outbound C2 blocked', elapsed_ms: 35488, test_type: 'blackbox', notes: 'ok', artifacts: [], recorded_at: '2026-10-13T10:10:59.000Z' },
-  ],
-  'bbbbbbbb-1111-2222-3333-444444444444': [
-    { id: 'r4', module_name: 'lolbin', action: 'PASS', passed: true, mitre: 'T1059.001', detail: 'LOLBin execution blocked', elapsed_ms: 3407, test_type: 'blackbox', notes: 'ok', artifacts: [], recorded_at: '2026-10-12T09:10:00.000Z' },
-  ],
+// Findings per run, shaped as GET /api/assessments/:id/findings returns them:
+// the assessment scope, per-severity counts, and findings already ordered most
+// severe first with severity applied server-side.
+const FINDINGS_BY_RUN = {
+  'aaaaaaaa-1111-2222-3333-444444444444': {
+    assessment: {
+      id: 'aaaaaaaa-1111-2222-3333-444444444444',
+      hostname: 'WS-RPT-01',
+      profile: 'rapid',
+      test_type: 'blackbox',
+      status: 'completed',
+      score: 75,
+      passed: 2,
+      failed: 1,
+      started_at: '2026-10-13T10:09:45.000Z',
+      completed_at: '2026-10-13T10:11:06.000Z',
+    },
+    counts: { CRITICAL: 0, HIGH: 1, MEDIUM: 0, LOW: 2, INFO: 0 },
+    total: 3,
+    findings: [
+      {
+        index: 1, module: 'identity', title: 'Credential attack not detected',
+        result: 'FAIL', severity: 'HIGH', isFinding: true, mitre: 'T1110.003',
+        executedAt: '2026-10-13T10:11:01.000Z', elapsedMs: 2240,
+        observation: 'No alert raised for repeated failed logins',
+        impact: 'Repeated failed authentication attempts produced no alert.',
+        recommendation: 'Enable failed-logon auditing thresholds.',
+      },
+      {
+        index: 2, module: 'malware', title: 'Malicious test file execution',
+        result: 'PASS', severity: 'LOW', isFinding: false, mitre: 'T1204.002',
+        executedAt: '2026-10-13T10:10:21.000Z', elapsedMs: 15094,
+        observation: 'EICAR execution blocked',
+        impact: 'A benign EICAR test file was executed rather than blocked.',
+        recommendation: 'Confirm real-time protection is enabled.',
+      },
+      {
+        index: 3, module: 'network', title: 'Outbound command-and-control traffic',
+        result: 'PASS', severity: 'LOW', isFinding: false, mitre: 'T1071.001',
+        executedAt: '2026-10-13T10:10:59.000Z', elapsedMs: 35488,
+        observation: 'Outbound C2 blocked',
+        impact: 'The endpoint initiated an outbound connection that was not blocked.',
+        recommendation: 'Enforce egress filtering to deny unapproved destinations.',
+      },
+    ],
+  },
+  'bbbbbbbb-1111-2222-3333-444444444444': {
+    assessment: {
+      id: 'bbbbbbbb-1111-2222-3333-444444444444',
+      hostname: 'WS-RPT-01',
+      profile: 'apt',
+      test_type: 'blackbox',
+      status: 'completed',
+      score: 100,
+      passed: 1,
+      failed: 0,
+      started_at: '2026-10-12T09:00:00.000Z',
+    },
+    counts: { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 1, INFO: 0 },
+    total: 1,
+    findings: [
+      {
+        index: 1, module: 'lolbin', title: 'Living-off-the-land binary abuse',
+        result: 'PASS', severity: 'LOW', isFinding: false, mitre: 'T1059.001',
+        executedAt: '2026-10-12T09:10:00.000Z', elapsedMs: 3407,
+        observation: 'LOLBin execution blocked',
+        impact: 'A signed Microsoft binary executed without detection.',
+        recommendation: 'Apply WDAC/AppLocker rules restricting LOLBin execution.',
+      },
+    ],
+  },
 };
-
-// Lookup keys for the results map: the request URL contains the run id with
-// dashes intact, so key the fixture on the raw id and compare loosely.
-// Results are keyed on the raw run id; the request URL keeps the dashes.
 
 async function setup(page) {
   await page.addInitScript(() => {
@@ -67,8 +125,12 @@ async function setup(page) {
     if (path === '/api/agent/version') return json({ version: '0.4.6' });
     if (path === '/api/agents/WS-RPT-01/assessments') return json(RUNS);
 
-    const results = path.match(/^\/api\/assessments\/(.+)\/results$/);
-    if (results) return json(RESULTS_BY_RUN[results[1]] ?? []);
+    const findings = path.match(/^\/api\/assessments\/(.+)\/findings$/);
+    if (findings) {
+      return json(FINDINGS_BY_RUN[findings[1]] ?? {
+        assessment: {}, counts: {}, total: 0, findings: [],
+      });
+    }
 
     return json({});
   });

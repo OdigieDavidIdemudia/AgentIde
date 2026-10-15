@@ -1,3 +1,19 @@
+/* ───────────────────────────────────────────���─────────────────────────────────
+   Design tokens — neobrutalist / 8-bit
+
+   The palette is deliberately unchanged: the mint accent (#00D4AA), the red
+   fail (#FF4D4D) and the amber warn (#F5A623) are the product's identity and
+   are reused at full strength rather than desaturated toward the usual muted
+   neobrutalist pastels. What changed is the *treatment*: hard edges, hard
+   offset shadows, no radius, and pixel typography.
+
+   Rules this system follows:
+   - every surface has a thick border and an un-blurred offset shadow
+   - no border-radius anywhere — nothing is rounded
+   - shadows are solid colour offsets, never blurred
+   - buttons physically depress: the shadow collapses on :active
+   ───────────────────────────────────────────────────────────────────────────── */
+
 :root {
   /* Spacing Tokens */
   --spacing-xxs: 4px;
@@ -22,8 +38,15 @@
   --lh-body: 1.5;
   --lh-relaxed: 1.7;
 
-  /* Fonts (TechnicalMono Pairing) */
-  --font-heading: 'Space Grotesk', sans-serif;
+  /* Fonts.
+     Silkscreen and Press Start 2P are pixel faces, so headings read as 8-bit
+     without hurting legibility. Press Start 2P is extremely wide, so it is
+     reserved for short labels and badges; Silkscreen carries the headings.
+     Body copy stays on JetBrains Mono, which is already monospaced and keeps
+     dense technical tables readable at small sizes. */
+  --font-pixel: 'Press Start 2P', 'Courier New', monospace;
+  --font-display: 'Silkscreen', 'Space Grotesk', sans-serif;
+  --font-heading: 'Silkscreen', 'Space Grotesk', sans-serif;
   --font-body: 'JetBrains Mono', monospace;
   --font-mono: 'JetBrains Mono', monospace;
 
@@ -39,7 +62,7 @@
   --n-800: #242424;
   --n-900: #141414;
 
-  /* Accent & Status Colors */
+  /* Accent & Status Colors — unchanged from the previous scheme. */
   --accent: #00D4AA;
   --accent-hover: #00B38F;
   --accent-rgb: 0, 212, 170;
@@ -48,14 +71,35 @@
   --warn: #F5A623;
   --info: #F5A623;
 
-  /* Minimalism specific */
-  --shadow-ambient: 0px 1px 3px rgba(0,0,0,0.08);
-  --border-width: 1px;
+  /* Neobrutalist geometry. Radii are zero everywhere — the old 4px rounding
+     was the single most "soft" thing about the previous design. */
+  --radius: 0px;
+  --radius-sm: 0px;
+  --border-width: 3px;
+  --border-width-thick: 4px;
+
+  /* Hard offset shadows. No blur, no spread — a solid block of ink offset by a
+     fixed number of pixels. This is what produces the printed-carte aesthetic
+     instead of the ambient-blur look. */
+  --shadow-hard-sm: 3px 3px 0 0 var(--ink);
+  --shadow-hard: 5px 5px 0 0 var(--ink);
+  --shadow-hard-lg: 8px 8px 0 0 var(--ink);
+  --shadow-none: none;
+
+  /* Ink is the colour used for borders and shadow offsets. It is separate
+     from --border so dark mode can invert the border without also inverting
+     the shadow into something invisible. */
+  --ink: #141414;
+
+  /* Legacy alias kept so existing rules that reference --shadow-ambient still
+     resolve; it now points at a hard shadow rather than a blur. */
+  --shadow-ambient: 5px 5px 0 0 var(--ink);
 }
 
-/* Global focus ring */
+/* Focus ring: a hard double outline rather than a soft glow, so keyboard focus
+   is as legible as everything else. */
 *:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--border-width) solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -65,19 +109,22 @@
   --surface: var(--n-100);
   --surface-raised: #FFFFFF;
   --bg-card: #FFFFFF;
-  --border: var(--n-300);
+  --border: var(--ink);
   --text-primary: var(--n-900);
   --text-secondary: var(--n-600);
 }
 
-/* Dark Mode */
+/* Dark Mode.
+   Borders flip to a light neutral so they stay visible against the dark
+   background; the shadow offset stays ink-black. */
 [data-theme='dark'] {
   --bg: var(--n-900);
   --surface: var(--n-800);
   --surface-raised: var(--n-700);
   --bg-card: var(--n-700);
-  --border: var(--n-700);
+  --border: var(--n-50);
   --text-primary: var(--n-50);
   --text-secondary: var(--n-400);
-  --shadow-ambient: 0px 1px 3px rgba(0,0,0,0.24);
+  --ink: #000000;
+  --shadow-ambient: 5px 5px 0 0 var(--ink);
 }

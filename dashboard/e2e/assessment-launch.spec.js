@@ -29,10 +29,42 @@ const RUN = {
   modules: ['malware', 'identity'],
 };
 
-const RESULTS = [
-  { id: 'r1', module_name: 'malware', action: 'PASS', passed: true, mitre: 'T1204.002', detail: 'EICAR blocked', elapsed_ms: 15094, test_type: 'blackbox', notes: '', artifacts: [], recorded_at: '2026-10-13T10:10:21.000Z' },
-  { id: 'r2', module_name: 'identity', action: 'FAIL', passed: false, mitre: 'T1110.003', detail: 'No alert raised', elapsed_ms: 2240, test_type: 'blackbox', notes: '', artifacts: [], recorded_at: '2026-10-13T10:11:01.000Z' },
-];
+// Findings as GET /api/assessments/:id/findings returns them: severity already
+// applied server-side, ordered most severe first.
+const FINDINGS = {
+  assessment: {
+    id: RUN.id,
+    hostname: 'WS-LAUNCH',
+    profile: 'rapid',
+    test_type: 'blackbox',
+    status: 'completed',
+    score: 75,
+    passed: 1,
+    failed: 1,
+    started_at: RUN.started_at,
+    completed_at: RUN.completed_at,
+  },
+  counts: { CRITICAL: 0, HIGH: 1, MEDIUM: 0, LOW: 1, INFO: 0 },
+  total: 2,
+  findings: [
+    {
+      index: 1, module: 'identity', title: 'Credential attack not detected',
+      result: 'FAIL', severity: 'HIGH', isFinding: true, mitre: 'T1110.003',
+      executedAt: '2026-10-13T10:11:01.000Z', elapsedMs: 2240,
+      observation: 'No alert raised',
+      impact: 'Repeated failed authentication attempts produced no alert.',
+      recommendation: 'Enable failed-logon auditing thresholds.',
+    },
+    {
+      index: 2, module: 'malware', title: 'Malicious test file execution',
+      result: 'PASS', severity: 'LOW', isFinding: false, mitre: 'T1204.002',
+      executedAt: '2026-10-13T10:10:21.000Z', elapsedMs: 15094,
+      observation: 'EICAR blocked',
+      impact: 'A benign EICAR test file was executed rather than blocked.',
+      recommendation: 'Confirm real-time protection is enabled.',
+    },
+  ],
+};
 
 async function setup(page, { vendorEvents = [] } = {}) {
   await page.addInitScript(() => {
@@ -50,7 +82,7 @@ async function setup(page, { vendorEvents = [] } = {}) {
     if (path === '/api/auth/me') return json({ ok: true });
     if (path === '/api/agent/version') return json({ version: '0.4.6' });
     if (path === '/api/agents/WS-LAUNCH/assessments') return json([RUN]);
-    if (/^\/api\/assessments\/.+\/results$/.test(path)) return json(RESULTS);
+    if (/^\/api\/assessments\/.+\/findings$/.test(path)) return json(FINDINGS);
     return json({});
   });
 }
@@ -70,7 +102,7 @@ async function readJsonExport(page) {
 test('report export does not fabricate a vendor or module list', async ({ page }) => {
   await setup(page);
   await page.goto('/reports');
-  await expect(page.getByText(/Assessment Modules/i).first()).toBeVisible();
+  await expect(page.getByText(/^Findings$/i).first()).toBeVisible();
 
   const payload = await readJsonExport(page);
 
@@ -95,7 +127,7 @@ test('report export is built from persisted results, not live events', async ({ 
   // buffer empty, which previously emptied module_results on export.
   await setup(page, { vendorEvents: [] });
   await page.goto('/reports');
-  await expect(page.getByText(/Assessment Modules/i).first()).toBeVisible();
+  await expect(page.getByText(/^Findings$/i).first()).toBeVisible();
 
   const payload = await readJsonExport(page);
 
@@ -106,6 +138,11 @@ test('report export is built from persisted results, not live events', async ({ 
   expect(malware.mitre).toBe('T1204.002');
   expect(malware.timestamp).toBeTruthy();
   expect(malware.duration_ms).toBe(15094);
+  // Severity and the narrative blocks travel with the export so a generated
+  // document is grounded in derived data rather than re-invented severity.
+  expect(malware.severity).toBe('LOW');
+  expect(malware.impact).toBeTruthy();
+  expect(malware.recommendation).toBeTruthy();
 });
 
 test('assessment page loads its agent scope without hardcoded URLs', async ({ page }) => {
