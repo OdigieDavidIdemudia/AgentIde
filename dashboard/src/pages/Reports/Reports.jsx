@@ -785,7 +785,16 @@ export default function Reports() {
             const fid = `finding-${f.index}`;
             const artifacts = Array.isArray(f.artifacts) ? f.artifacts : [];
             return (
-              <div key={`${f.module}-${f.index}`} className={styles.findingCard}>
+              <div
+                key={`${f.module}-${f.index}`}
+                // Cards cascade in as discrete stepped frames rather than
+                // easing — that stepping is what reads as 8-bit. A CRITICAL
+                // finding additionally glitches once: rarity is what makes it
+                // land, so it is reserved for the worst severity only.
+                className={`${styles.findingCard} anim-cascade${
+                  f.severity === 'CRITICAL' ? ' anim-glitch' : ''
+                }`}
+              >
                 <div className={styles.findingHeader}>
                   <span className={styles.findingIndex}>{f.index}.</span>
                   <span className={styles.findingTitle}>{f.title || f.module}</span>

@@ -87,6 +87,16 @@ button {
   overflow: hidden;
 }
 
+/* Wrapper around sidebar + content so the scanline overlay has something to
+   attach to. It has to reproduce the flex row it replaced, otherwise #root
+   ends up with a single flex child and the layout collapses to a column. */
+.app-shell {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
 .main-content {
   flex: 1;
   min-width: 0;
@@ -127,6 +137,70 @@ button {
   height: var(--border-width);
   background-color: var(--border);
   margin: var(--spacing-xl) 0;
+}
+
+/* ── Motion ──────────────────────────────────────────────────────────────────
+   8-bit motion must not ease. A smooth cubic-bezier fade reads as a modern
+   web app; stepping between discrete frames reads as sprite animation, which is
+   the whole point. Every duration below is therefore declared with steps().
+
+   Everything here is CSS. An animation library (Motion, the successor to
+   Framer Motion) was considered and not adopted: the cascade, blink and pulse
+   are all achievable without shipping a dependency, and layout animation is
+   the only thing that would justify one. */
+
+/* Cards settle in from up-left with the shadow collapsing onto its final
+   offset — the element appears to be pressed flat and then stamped down. */
+@keyframes cascade {
+  from {
+    opacity: 0;
+    transform: translate(-10px, -10px);
+    box-shadow: 0 0 0 0 var(--ink);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    box-shadow: var(--shadow-hard);
+  }
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+/* Square on/off pulse for status LEDs. Deliberately no glow — a soft radial
+   pulse would undo the hard-edged treatment. */
+@keyframes pulse {
+  50% { background-color: var(--text-secondary); }
+}
+
+/* Two-step glitch for CRITICAL findings only. Rarity is what makes it land:
+   if everything glitched, nothing would. */
+@keyframes glitch {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-2px, 1px); }
+  50% { transform: translate(2px, -1px); }
+  75% { transform: translate(-1px, -1px); }
+}
+
+.anim-cascade { animation: cascade 240ms steps(4, end) both; }
+.anim-blink { animation: blink 1s steps(2, jump-none) infinite; }
+.anim-pulse { animation: pulse 1.2s steps(2, end) infinite; }
+.anim-glitch { animation: glitch 260ms steps(4, end) 2; }
+
+/* CRT scanlines. Kept at 2% so it is felt rather than read, and pointer-events
+   are off so it never blocks interaction. */
+.scanlines::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.02) 0 2px,
+    transparent 2px 4px
+  );
 }
 
 /* ── Buttons ─────────────────────────────────────────────────────────────────
@@ -201,7 +275,7 @@ button {
   background: none;
   border: none;
   box-shadow: none;
-  color: var(--accent);
+  color: var(--accent-text);
   font-family: var(--font-body);
   font-weight: 500;
   text-transform: none;
@@ -211,4 +285,32 @@ button {
 .btn-link:hover {
   color: var(--accent-hover);
   text-decoration: underline;
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────────────────
+   A security console that flashes, pulses and glitches is an accessibility
+   problem. Everything above is decorative, so it is switched off wholesale
+   rather than tuned down — but the press feedback is kept at zero duration so
+   buttons still feel responsive to keyboard users. */
+@media (prefers-reduced-motion: reduce) {
+  .anim-cascade,
+  .anim-blink,
+  .anim-pulse,
+  .anim-glitch {
+    animation: none;
+  }
+
+  /* The scanline overlay is a background, not an animation, so clearing
+     animation would leave it on screen. Remove it outright. */
+  .scanlines::after {
+    display: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

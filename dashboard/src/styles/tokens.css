@@ -71,6 +71,13 @@
   --warn: #F5A623;
   --info: #F5A623;
 
+  /* Accent for TEXT. The mint is deliberately light so it works as a fill
+     against dark ink, which makes it roughly 1.9:1 on the light background —
+     far too low to read as text. This is the same hue darkened for that use,
+     so accent-coloured text and accent fills stay visibly one colour family
+     without making the text illegible. */
+  --accent-text: #00A886;
+
   /* Neobrutalist geometry. Radii are zero everywhere — the old 4px rounding
      was the single most "soft" thing about the previous design. */
   --radius: 0px;
@@ -87,9 +94,9 @@
   --shadow-none: none;
 
   /* Ink is the colour used for borders and shadow offsets. It is separate
-     from --border so dark mode can invert the border without also inverting
-     the shadow into something invisible. */
-  --ink: #141414;
+     from --border so the light theme can invert the border without also
+     inverting the shadow into something invisible. */
+  --ink: #000000;
 
   /* Legacy alias kept so existing rules that reference --shadow-ambient still
      resolve; it now points at a hard shadow rather than a blur. */
@@ -103,28 +110,32 @@
   outline-offset: 2px;
 }
 
-/* Light Mode (Default) */
+/* Dark is the DEFAULT.
+   :root carries the dark palette rather than setting data-theme="dark" from
+   script, so there is no flash of the light theme before React mounts. The
+   hard offset shadows only read properly against a dark ground, and the mint
+   accent glows instead of sitting flat, so dark is also the better default
+   for this treatment — not just the more fashionable one. */
 :root {
-  --bg: var(--n-50);
-  --surface: var(--n-100);
-  --surface-raised: #FFFFFF;
-  --bg-card: #FFFFFF;
-  --border: var(--ink);
-  --text-primary: var(--n-900);
-  --text-secondary: var(--n-600);
-}
-
-/* Dark Mode.
-   Borders flip to a light neutral so they stay visible against the dark
-   background; the shadow offset stays ink-black. */
-[data-theme='dark'] {
   --bg: var(--n-900);
   --surface: var(--n-800);
   --surface-raised: var(--n-700);
   --bg-card: var(--n-700);
+  /* Borders flip to a light neutral so they stay visible on the dark ground;
+     the shadow offset stays ink-black. */
   --border: var(--n-50);
   --text-primary: var(--n-50);
   --text-secondary: var(--n-400);
-  --ink: #000000;
-  --shadow-ambient: 5px 5px 0 0 var(--ink);
+}
+
+/* Light Mode — opt in via data-theme="light". */
+[data-theme='light'] {
+  --bg: var(--n-50);
+  --surface: var(--n-100);
+  --surface-raised: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --border: var(--n-900);
+  --text-primary: var(--n-900);
+  --text-secondary: var(--n-600);
+  --ink: #141414;
 }

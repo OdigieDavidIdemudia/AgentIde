@@ -38,20 +38,25 @@ function App() {
   return (
     <AgentProvider token={localStorage.getItem('agentide-token')}>
       <BrowserRouter>
-        <Sidebar onLogout={handleLogout} />
-        <main className="main-content">
-          <Routes>
-            <Route path="/" element={<FleetView />} />
-            <Route path="/assessment" element={<Assessments />} />
-            <Route path="/assessment/:hostname" element={<Assessments />} />
-            <Route path="/console" element={<LiveConsole />} />
-            <Route path="/console/:assessmentId" element={<LiveConsole />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/agents" element={<AgentManagement />} />
-            <Route path="/server" element={<ServerManagement />} />
-            <Route path="/users" element={<Users />} />
-          </Routes>
-        </main>
+        {/* `scanlines` draws a faint fixed CRT overlay via ::after. It is
+            pointer-events:none and sits above the UI, so it never blocks a
+            click, and it is removed entirely under prefers-reduced-motion. */}
+        <div className="app-shell scanlines">
+          <Sidebar onLogout={handleLogout} />
+          <main className="main-content">
+            <Routes>
+              <Route path="/" element={<FleetView />} />
+              <Route path="/assessment" element={<Assessments />} />
+              <Route path="/assessment/:hostname" element={<Assessments />} />
+              <Route path="/console" element={<LiveConsole />} />
+              <Route path="/console/:assessmentId" element={<LiveConsole />} />
+              <Route path="/reports" element={<Reports />} />
+              <Route path="/agents" element={<AgentManagement />} />
+              <Route path="/server" element={<ServerManagement />} />
+              <Route path="/users" element={<Users />} />
+            </Routes>
+          </main>
+        </div>
       </BrowserRouter>
     </AgentProvider>
   );

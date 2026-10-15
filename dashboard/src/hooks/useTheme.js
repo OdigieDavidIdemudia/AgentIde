@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react';
 
 export function useTheme() {
   const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('agentide-theme') || 'light';
+    // Dark is the default. tokens.css also defines dark on :root, so a first
+    // visit is dark even before this hook runs — the attribute written below
+    // only matters once the operator has expressed a preference.
+    return localStorage.getItem('agentide-theme') || 'dark';
   });
 
   useEffect(() => {

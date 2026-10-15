@@ -130,9 +130,30 @@ export default function FleetView() {
         <h2>Fleet View</h2>
         <div className={styles.status}>
           {state.connectionStatus === 'connected' ? (
-            <span className={styles.online}>● Server Connected</span>
+            // Pulsing square LED rather than the old round glyph: the pulse is a
+            // hard two-frame on/off, so it matches the hard-edged treatment
+            // instead of reading as a soft glow.
+            <span className={styles.online}>
+              <span className="anim-pulse" aria-hidden="true" style={{
+                display: 'inline-block',
+                width: '8px',
+                height: '8px',
+                marginRight: '6px',
+                background: 'var(--pass)',
+              }} />
+              Server Connected
+            </span>
           ) : (
-            <span className={styles.offline}>○ Server Disconnected</span>
+            <span className={styles.offline}>
+              <span aria-hidden="true" style={{
+                display: 'inline-block',
+                width: '8px',
+                height: '8px',
+                marginRight: '6px',
+                border: '2px solid var(--fail)',
+              }} />
+              Server Disconnected
+            </span>
           )}
         </div>
       </header>

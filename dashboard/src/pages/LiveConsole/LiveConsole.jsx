@@ -283,6 +283,17 @@ export default function LiveConsole() {
               )}
             </div>
           ))}
+          {/* Blinking block cursor on the last line — the detail that makes the
+              stream read as a live terminal rather than a scrolling log. */}
+          <div className={styles.eventRow} aria-hidden="true">
+            <span className={styles.type}>[cursor]</span>
+            <span className="anim-blink" style={{
+              display: 'inline-block',
+              width: '9px',
+              height: '14px',
+              background: 'var(--accent)',
+            }} />
+          </div>
         </div>
       )}
     </div>
