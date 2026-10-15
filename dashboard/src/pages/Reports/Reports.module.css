@@ -112,6 +112,36 @@
   border-bottom: 1px solid var(--border);
 }
 
+/* Findings — structured cards replacing the flat grid rows.
+   Each finding reads as: numbered header + severity, then Observation /
+   Impact / Recommendation blocks, matching the consulting report format. */
+.findingCard {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.findingHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--border);
+}
+
+.findingIndex {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
 /* Finding rows */
 .findingRow {
   display: grid;

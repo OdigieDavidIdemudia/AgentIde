@@ -10,6 +10,7 @@ import { pool } from './db.js';
 import { issueToken, revokeToken, requireAuth, checkAdminCredentials, isLoginAllowed, registerLoginFailure } from './auth.js';
 import { getLatestAgent, buildUpdateCommand } from './agent-update.js';
 import { resolveAgentIdentity } from './agent-identity.js';
+import { buildFindings, summariseBySeverity } from './finding-taxonomy.js';
 
 const allowedOrigins = (process.env.CORS_ORIGINS || '')
   .split(',')
@@ -238,6 +239,82 @@ app.get('/api/assessments/:id/results', async (req, res) => {
   } catch (err) {
     console.error('Failed to get assessment results:', err);
     res.status(500).json({ error: 'Failed to get assessment results' });
+  }
+});
+
+// Structured findings for one assessment run, in the consulting-report shape:
+// each result becomes a finding with a deterministic severity plus
+// observation / impact / recommendation.
+//
+// This exists because the only place that structure lived was a Gemini prompt,
+// so severities were whatever the model wrote for a given run and could not
+// be filtered, compared or reproduced. Severity here is derived from the
+// recorded verdict (see finding-taxonomy.js) and never invented.
+app.get('/api/assessments/:id/findings', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const assessmentRes = await pool.query(`
+      SELECT a.id, a.profile, a.duration_days, a.modules, a.test_type,
+             a.started_at, a.completed_at, a.status, a.score, a.passed, a.failed,
+             ag.hostname, ag.vendor
+      FROM assessments a
+      JOIN agents ag ON ag.id = a.agent_id
+      WHERE a.id = $1
+    `, [id]);
+    if (assessmentRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Assessment not found' });
+    }
+    const assessment = assessmentRes.rows[0];
+
+    const result = await pool.query(`
+      SELECT r.*, a.started_at
+      FROM results r
+      JOIN assessments a ON a.id = r.assessment_id
+      WHERE r.assessment_id = $1
+      ORDER BY r.recorded_at ASC
+    `, [id]);
+
+    // results rows have no mitre column — the agent's ID is JSON-encoded inside
+    // `notes`. Parse it out here so the taxonomy can group by technique.
+    const rows = result.rows.map((row) => {
+      let mitre = null;
+      if (row.notes) {
+        try {
+          const parsed = JSON.parse(row.notes);
+          mitre = parsed && parsed.mitre ? parsed.mitre : null;
+        } catch {
+          // notes is prose, not JSON — leave mitre null.
+        }
+      }
+      return { ...row, mitre };
+    });
+
+    const findings = buildFindings(rows);
+    const counts = summariseBySeverity(findings);
+
+    res.json({
+      assessment: {
+        id: assessment.id,
+        hostname: assessment.hostname,
+        vendor: assessment.vendor || null,
+        profile: assessment.profile,
+        test_type: assessment.test_type,
+        duration_days: assessment.duration_days,
+        modules: assessment.modules,
+        status: assessment.status,
+        score: assessment.score,
+        passed: assessment.passed,
+        failed: assessment.failed,
+        started_at: assessment.started_at,
+        completed_at: assessment.completed_at,
+      },
+      counts,
+      total: findings.length,
+      findings,
+    });
+  } catch (err) {
+    console.error('Failed to build assessment findings:', err);
+    res.status(500).json({ error: 'Failed to build assessment findings' });
   }
 });
 

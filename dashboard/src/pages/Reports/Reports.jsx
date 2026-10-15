@@ -85,6 +85,92 @@ function fmtTime(ts) {
   try { return new Date(ts).toLocaleTimeString(); } catch { return ts; }
 }
 
+// ─── Finding presentation ────────────────────────────────────────────────────
+
+const SEVERITY_COLOURS = {
+  CRITICAL: { bg: '#7f1d1d', fg: '#ffffff' },
+  HIGH: { bg: '#b42318', fg: '#ffffff' },
+  MEDIUM: { bg: '#9a6700', fg: '#ffffff' },
+  LOW: { bg: '#1a7f37', fg: '#ffffff' },
+  INFO: { bg: '#57606a', fg: '#ffffff' },
+};
+
+function SeverityBadge({ severity }) {
+  const c = SEVERITY_COLOURS[severity] || SEVERITY_COLOURS.INFO;
+  return (
+    <span style={{
+      background: c.bg, color: c.fg, padding: '1px 8px', borderRadius: '3px',
+      fontSize: '0.7rem', fontWeight: 'bold', letterSpacing: '0.04em',
+      whiteSpace: 'nowrap',
+    }}>
+      {severity}
+    </span>
+  );
+}
+
+// Counts up front so a reader sees the shape of the assessment before
+// scrolling, which is the convention in the reference report format.
+function SeveritySummary({ counts }) {
+  const order = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'];
+  return (
+    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '14px' }}>
+      {order.map((k) => (
+        <div key={k} style={{
+          display: 'flex', alignItems: 'center', gap: '6px',
+          padding: '4px 10px', borderRadius: '4px',
+          background: 'var(--surface)', border: '1px solid var(--border)',
+        }}>
+          <SeverityBadge severity={k} />
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>{counts[k] ?? 0}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div style={{ marginTop: '10px' }}>
+      <div style={{
+        display: 'inline-block', background: 'var(--accent)', color: '#fff',
+        padding: '2px 8px', fontSize: '0.7rem', fontWeight: 'bold',
+        letterSpacing: '0.04em', textTransform: 'uppercase',
+        borderRadius: '3px 3px 0 0', marginBottom: '4px',
+      }}>
+        {label}
+      </div>
+      <div style={{
+        padding: '8px 12px', background: 'var(--surface)',
+        borderLeft: '3px solid var(--accent)', borderRadius: '0 4px 4px 0',
+        fontSize: '0.85rem', color: 'var(--text-primary)',
+      }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Execution metadata belongs with the observation, not as loose columns.
+function MetaLine({ finding, artifacts }) {
+  const bits = [];
+  if (finding.executedAt) bits.push(`Executed ${fmtTime(finding.executedAt)}`);
+  if (finding.elapsedMs) bits.push(`${finding.elapsedMs}ms`);
+  if (finding.result) bits.push(`Verdict ${finding.result}`);
+  return (
+    <div style={{ marginTop: '6px' }}>
+      <div className={styles.mitre}>{bits.join('  ·  ')}</div>
+      {artifacts.length > 0 && (
+        <div className={styles.mitre} style={{ marginTop: '4px' }}>
+          Files created:
+          {artifacts.map((a, i) => (
+            <code key={i} style={{ display: 'block', wordBreak: 'break-all', color: 'var(--text-secondary)' }}>{a}</code>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 function extractTactic(mitreId) {
@@ -108,6 +194,10 @@ export default function Reports() {
   const [runs, setRuns] = useState([]);
   const [activeRunId, setActiveRunId] = useState(null);
   const [runResults, setRunResults] = useState([]);
+  // Structured findings from /findings: each carries a deterministic severity
+  // plus observation / impact / recommendation. Null until loaded, and null
+  // again if the run has no results.
+  const [runFindings, setRunFindings] = useState(null);
   const [loadingRun, setLoadingRun] = useState(false);
   const [remediations, setRemediations] = useState({});
   const [loadingRemediation, setLoadingRemediation] = useState({});
@@ -162,21 +252,36 @@ export default function Reports() {
     };
   }, [selected]);
 
-  // Load the module results for the chosen run.
+  // Load the structured findings for the chosen run.
+  //
+  // This replaces the raw /results rows: the server now derives severity,
+  // observation, impact and recommendation deterministically, so the report
+  // does not depend on an LLM inventing a severity per run.
   useEffect(() => {
     if (!activeRunId) {
       setRunResults([]);
+      setRunFindings(null);
       return;
     }
     let cancelled = false;
     setLoadingRun(true);
-    apiFetch(`/api/assessments/${activeRunId}/results`)
-      .then((res) => (res.ok ? res.json() : []))
-      .then((rows) => {
-        if (!cancelled) setRunResults(Array.isArray(rows) ? rows : []);
+    apiFetch(`/api/assessments/${activeRunId}/findings`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload) => {
+        if (cancelled) return;
+        if (!payload) {
+          setRunFindings(null);
+          setRunResults([]);
+          return;
+        }
+        setRunFindings(payload);
+        setRunResults(Array.isArray(payload.findings) ? payload.findings : []);
       })
       .catch(() => {
-        if (!cancelled) setRunResults([]);
+        if (!cancelled) {
+          setRunFindings(null);
+          setRunResults([]);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoadingRun(false);
@@ -660,54 +765,69 @@ export default function Reports() {
         </div>
       )}
 
-      {/* Assessment Modules */}
+      {/* Findings — structured per the consulting format: numbered, severity-rated,
+          each with Observation / Impact / Recommendation. Severity comes from the
+          server taxonomy, not from a model. */}
       {runResults.length > 0 && (
         <div className={styles.section}>
-          <div className={styles.sectionTitle}>Assessment Modules</div>
-          {runResults.map((r, i) => {
-            const result = r.action || (r.passed ? 'PASS' : 'FAIL');
-            // An INFO ack is not a gap, so it must not render as one.
-            const isGap = !NON_VERDICT_RESULTS.has(result) && !isVerdictPass(result);
-            const fid = `mod-${i}`;
-            const artifacts = Array.isArray(r.artifacts) ? r.artifacts : [];
+          <div className={styles.sectionTitle}>Findings</div>
+
+          {runFindings?.counts && <SeveritySummary counts={runFindings.counts} />}
+
+          {runResults.map((f) => {
+            const fid = `finding-${f.index}`;
+            const artifacts = Array.isArray(f.artifacts) ? f.artifacts : [];
             return (
-              <div key={r.id || i} style={{ display: 'flex', flexDirection: 'column' }}>
-                <div className={styles.findingRow}>
-                  <div>{resultBadge(result, styles)}</div>
-                  <div style={{ flex: 1 }}>
-                    <div className={styles.findingTitle}>{r.module_name}</div>
-                    <div className={styles.findingDetail}>{r.detail || 'No additional detail reported.'}</div>
-                    {r.notes && <div className={styles.mitre} style={{marginTop:2}}>{r.notes}</div>}
-                    {r.elapsed_ms > 0 && <div className={styles.mitre} style={{marginTop:2}}>Duration: {r.elapsed_ms}ms</div>}
-                    {r.mitre && <div className={styles.mitre} style={{marginTop:2}}>MITRE: {r.mitre}</div>}
-                    {artifacts.length > 0 && (
-                      <div className={styles.mitre} style={{ marginTop: 4 }}>
-                        Files created:
-                        {artifacts.map((a, ai) => (
-                          <code key={ai} style={{ display: 'block', wordBreak: 'break-all', color: 'var(--text-secondary)' }}>{a}</code>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: 'flex-end' }}>
-                    {typeBadge(r.test_type, styles)}
-                    {isGap && !remediations[fid] && (
-                      <button 
-                        onClick={() => handleGenerateRemediation(fid, { module: r.module_name, detail: r.detail, mitre: r.mitre })}
-                        disabled={loadingRemediation[fid]}
-                        style={{ marginTop: 4, background: 'var(--accent)', border: 'none', color: '#fff', padding: '4px 8px', borderRadius: '4px', cursor: loadingRemediation[fid] ? 'wait' : 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}
-                      >
-                        {loadingRemediation[fid] ? "Generating..." : "Generate Remediation"}
-                      </button>
-                    )}
-                  </div>
-                  <div className={styles.mitre}>{fmtTime(r.recorded_at)}</div>
+              <div key={`${f.module}-${f.index}`} className={styles.findingCard}>
+                <div className={styles.findingHeader}>
+                  <span className={styles.findingIndex}>{f.index}.</span>
+                  <span className={styles.findingTitle}>{f.title || f.module}</span>
+                  <SeverityBadge severity={f.severity} />
+                  {f.mitre && <span className={styles.mitre}>MITRE: {f.mitre}</span>}
+                  <span className={styles.mitre}>{resultBadge(f.result, styles)}</span>
                 </div>
-                
-                {/* AI Remediation Output */}
+
+                <Field label="Observation">
+                  <div>{f.observation}</div>
+                  <MetaLine finding={f} artifacts={artifacts} />
+                </Field>
+
+                <Field label="Impact">
+                  <div>{f.impact}</div>
+                </Field>
+
+                <Field label="Recommendation">
+                  <div>{f.recommendation}</div>
+                </Field>
+
+                {/* The taxonomy's recommendation is the deterministic baseline.
+                    The LLM option stays available for a bespoke write-up but is
+                    explicitly secondary so it cannot be mistaken for the finding. */}
+                {f.isFinding && !remediations[fid] && (
+                  <button
+                    onClick={() => handleGenerateRemediation(fid, { module: f.module, detail: f.observation, mitre: f.mitre, severity: f.severity })}
+                    disabled={loadingRemediation[fid]}
+                    style={{
+                      alignSelf: 'flex-start', background: 'transparent',
+                      border: '1px solid var(--accent)', color: 'var(--accent)',
+                      padding: '4px 10px', borderRadius: '4px',
+                      cursor: loadingRemediation[fid] ? 'wait' : 'pointer',
+                      fontSize: '0.75rem', fontWeight: 'bold',
+                    }}
+                  >
+                    {loadingRemediation[fid] ? 'Generating…' : 'Draft tailored guidance (AI)'}
+                  </button>
+                )}
+
                 {remediations[fid] && (
-                  <div style={{ margin: '0 16px 16px 16px', padding: '16px', background: 'var(--surface)', borderLeft: '4px solid var(--accent)', borderRadius: '4px', color: 'var(--text-primary)', fontSize: '0.85rem', whiteSpace: 'pre-wrap' }}>
-                    <div style={{ fontWeight: 'bold', marginBottom: '8px', color: 'var(--accent)' }}>AI-Generated Remediation Strategy</div>
+                  <div style={{
+                    padding: '12px', background: 'var(--surface)',
+                    borderLeft: '4px solid var(--accent)', borderRadius: '4px',
+                    color: 'var(--text-primary)', fontSize: '0.85rem', whiteSpace: 'pre-wrap',
+                  }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: '8px', color: 'var(--accent)' }}>
+                      AI-drafted guidance (review before use)
+                    </div>
                     {remediations[fid]}
                   </div>
                 )}
