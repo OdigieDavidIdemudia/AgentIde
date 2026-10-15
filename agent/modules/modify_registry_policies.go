@@ -1,3 +1,5 @@
+//go:build windows
+
 package modules
 
 import (
@@ -251,6 +253,11 @@ func (m *modifyRegistryPoliciesModule) setRegistryPolicy(path, valueName string,
 	}
 	defer k.Close()
 
+	// Snapshot the original value so it can be restored after the assessment.
+	// Without this, a completed run leaves Defender, the firewall, UAC and
+	// Windows Update disabled on the endpoint permanently.
+	snapshotDWORD(path, valueName)
+
 	// Set the value
 	err = k.SetDWordValue(valueName, value)
 	if err != nil {
@@ -265,4 +272,3 @@ func (m *modifyRegistryPoliciesModule) setRegistryPolicy(path, valueName string,
 
 	return val == uint64(value)
 }
-

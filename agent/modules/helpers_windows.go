@@ -4,6 +4,7 @@ package modules
 
 import (
 	"agentide/core"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -204,9 +205,56 @@ func rollback(entry ledgerEntry, logger *core.Logger) error {
 		return removeIfExists(entry.Path)
 	case "startup":
 		return removeStartupPayload()
+	case "regdword":
+		return rollbackDWORD(entry)
+	case "regstring":
+		return rollbackString(entry)
 	default:
 		return fmt.Errorf("unknown ledger kind: %s", entry.Kind)
 	}
+}
+
+// rollbackDWORD restores (or removes) a registry DWORD the assessment changed.
+func rollbackDWORD(entry ledgerEntry) error {
+	k, _, err := registry.CreateKey(registry.LOCAL_MACHINE, entry.Path, registry.SET_VALUE)
+	if err != nil {
+		return err
+	}
+	defer k.Close()
+
+	if !entry.HadValue {
+		// The module created this value; removing it returns the system to the
+		// state it was in before the assessment.
+		if err := k.DeleteValue(entry.RegValueName); err != nil {
+			// Already absent — nothing to undo.
+			if errors.Is(err, registry.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		return nil
+	}
+	return k.SetDWordValue(entry.RegValueName, uint32(entry.RegValue))
+}
+
+// rollbackString restores (or removes) a registry string the assessment changed.
+func rollbackString(entry ledgerEntry) error {
+	k, _, err := registry.CreateKey(registry.LOCAL_MACHINE, entry.Path, registry.SET_VALUE)
+	if err != nil {
+		return err
+	}
+	defer k.Close()
+
+	if !entry.HadValue {
+		if err := k.DeleteValue(entry.RegValueName); err != nil {
+			if errors.Is(err, registry.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		return nil
+	}
+	return k.SetStringValue(entry.RegValueName, string(entry.Payload))
 }
 
 func removeIfExists(path string) error {
@@ -215,6 +263,51 @@ func removeIfExists(path string) error {
 		return exec.Command("cmd", "/c", "rmdir", "/s", "/q", path).Run()
 	}
 	return nil
+}
+
+// snapshotDWORD records the current state of a HKLM DWORD value so the ledger
+// can put it back afterwards.
+//
+// This must be called BEFORE the value is overwritten. The tamper modules
+// disable AMSI, ETW autologgers and Defender policies; without this snapshot a
+// completed assessment leaves the endpoint permanently weakened, because no
+// later code path restores them.
+//
+// A missing value is recorded as HadValue=false so rollback deletes it rather
+// than writing a zero that was never there.
+func snapshotDWORD(path, valueName string) {
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, path, registry.QUERY_VALUE)
+	if err != nil {
+		// The key does not exist yet. Remember that, so rollback knows the
+		// value was created by us and should be removed.
+		globalLedger.RecordRegValue(path, valueName, false, 0, registry.DWORD)
+		return
+	}
+	defer k.Close()
+
+	val, _, err := k.GetIntegerValue(valueName)
+	if err != nil {
+		globalLedger.RecordRegValue(path, valueName, false, 0, registry.DWORD)
+		return
+	}
+	globalLedger.RecordRegValue(path, valueName, true, uint64(val), registry.DWORD)
+}
+
+// snapshotString records the current state of a HKLM string value.
+func snapshotString(path, valueName string) {
+	k, err := registry.OpenKey(registry.LOCAL_MACHINE, path, registry.QUERY_VALUE)
+	if err != nil {
+		globalLedger.RecordRegString(path, valueName, false, "")
+		return
+	}
+	defer k.Close()
+
+	val, _, err := k.GetStringValue(valueName)
+	if err != nil {
+		globalLedger.RecordRegString(path, valueName, false, "")
+		return
+	}
+	globalLedger.RecordRegString(path, valueName, true, val)
 }
 
 func removeStartupPayload() error {

@@ -1,3 +1,5 @@
+//go:build windows
+
 package modules
 
 import (
@@ -73,6 +75,10 @@ func (m *disableETWModule) Run() RawResult {
 			continue
 		}
 
+		// Snapshot the original Start value before overwriting it, so the
+		// endpoint's ETW configuration is restored after the assessment.
+		snapshotDWORD(autologgerPath, "Start")
+
 		// Try to disable by setting Start = 0 (disabled)
 		err = k.SetDWordValue("Start", 0)
 		if err != nil {
@@ -92,7 +98,7 @@ func (m *disableETWModule) Run() RawResult {
 			disabledCount++
 			details = append(details, provider.description+" disabled")
 			m.logger.Info("ETW provider disabled", map[string]interface{}{
-				"provider": provider.name,
+				"provider":   provider.name,
 				"autologger": provider.autologger,
 			})
 		} else {
@@ -113,4 +119,3 @@ func (m *disableETWModule) Run() RawResult {
 
 	return result
 }
-
