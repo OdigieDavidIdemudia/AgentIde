@@ -216,3 +216,40 @@ test('no horizontal overflow at 320px', async ({ page }) => {
   // Allow 1px for sub-pixel rounding.
   expect(overflow).toBeLessThanOrEqual(1);
 });
+
+test('every fleet table column is reachable, not clipped away', async ({ page }) => {
+  // The document-level assertion above cannot catch the real failure: body
+  // sets overflow:hidden and .main-content sets overflow-x:hidden, so a table
+  // wider than its container is silently clipped and the rightmost buttons
+  // become unreachable with no scrollbar to reveal them. That is exactly what
+  // happened once the pixel display face made the headers much wider.
+  //
+  // This checks the table against its own scroll container instead: whatever
+  // its intrinsic width, the container must be able to reach all of it.
+  for (const width of [1440, 1280, 1024, 800]) {
+    await page.setViewportSize({ width, height: 900 });
+    await setup(page);
+    await page.getByText('WS-AGG-01').first().waitFor();
+
+    const m = await page.evaluate(() => {
+      const table = document.querySelector('table');
+      if (!table) return null;
+      const wrap = table.parentElement;
+      const cs = getComputedStyle(wrap);
+      return {
+        overflowX: cs.overflowX,
+        // scrollable when the container can scroll to reveal the table's full
+        // width; otherwise the table must already fit.
+        reachable:
+          cs.overflowX === 'auto' || cs.overflowX === 'scroll'
+            ? wrap.scrollWidth >= table.scrollWidth
+            : wrap.clientWidth >= table.scrollWidth - 1,
+        tableW: table.scrollWidth,
+        wrapW: wrap.clientWidth,
+      };
+    });
+
+    expect(m, `no table at ${width}px`).not.toBeNull();
+    expect(m.reachable, `table clipped at ${width}px (${m.tableW}px in ${m.wrapW}px, overflow-x: ${m.overflowX})`).toBe(true);
+  }
+});

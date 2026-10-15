@@ -268,15 +268,29 @@ export default function FleetView() {
         />
       ) : (
         <div className="card">
-          <table className={styles.table}>
+          {/* Eight columns of pixel-font headers plus the action buttons exceed
+              the card at realistic widths. The table used to sit directly in
+              the card, so the surplus was clipped by .main-content's
+              overflow-x:hidden and the rightmost buttons were simply
+              unreachable. A scroll container keeps every column reachable
+              instead of silently hiding it. */}
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
             <thead>
               <tr>
-                <th>Hostname</th>
-                <th>IP Address</th>
-                <th>OS</th>
-                <th>OS Version</th>
-                <th>Discovered Agent</th>
-                <th>Agent Version</th>
+                {/* Headers are abbreviated deliberately. The pixel display
+                    face is much wider than the previous proportional one, and
+                    "IP Address" / "Discovered Agent" / "Agent Version" pushed
+                    the table past its container. The full wording is kept in
+                    the title attribute and the row context makes each column
+                    unambiguous. "Discovered Agent" also becomes "Vendor",
+                    which is what the column actually lists. */}
+                <th title="Hostname">Hostname</th>
+                <th title="IP Address">IP</th>
+                <th title="Operating System">OS</th>
+                <th title="Operating System Version">OS Version</th>
+                <th title="Security vendor discovered on the endpoint">Vendor</th>
+                <th title="Agent version reported by the endpoint">Version</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -345,11 +359,13 @@ export default function FleetView() {
                     </span>
                   </td>
                   <td className={styles.actions} style={{ display: 'flex', gap: '8px' }}>
-                    <button 
+                    <button
                       className="btn-primary"
+                      style={{ padding: 'var(--spacing-xs) var(--spacing-sm)' }}
+                      title={`Launch an assessment against ${agent.hostname}`}
                       onClick={() => navigate(`/assessment/${agent.hostname}`)}
                     >
-                      Launch Assessment
+                      Launch
                     </button>
                     <button 
                       className="btn-danger"
@@ -364,6 +380,7 @@ export default function FleetView() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

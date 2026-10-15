@@ -41,15 +41,33 @@
   margin-top: var(--spacing-sm);
 }
 
+/* Horizontal scroll container for the fleet table.
+   Eight columns of pixel-font headers plus the action buttons exceed the card
+   at realistic widths (measured: 1165px of table in a 1064px container). The
+   surplus used to be clipped by .main-content's overflow-x:hidden, so the
+   rightmost buttons were unreachable with no scrollbar to reveal them.
+   overflow-x:auto makes every column reachable instead of silently hiding it. */
+.tableWrap {
+  overflow-x: auto;
+  /* Keeps the scrollbar from adding a second, conflicting scroll surface when
+     the table is also inside a vertically scrolling pane. */
+  overflow-y: hidden;
+}
+
 /* Table */
 .table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
+  /* Below this the columns can no longer be honoured without truncating text,
+     so let the wrapper scroll rather than crushing everything. */
+  min-width: 940px;
 }
 
 .table th {
-  padding: var(--spacing-md);
+  /* Tighter than the body's --spacing-md. Eight columns at 16px of side padding
+     each cost 256px, which was a third of the overflow. */
+  padding: var(--spacing-sm) var(--spacing-xs);
   border-bottom: var(--border-width) solid var(--border);
   font-family: var(--font-heading);
   color: var(--text-secondary);
@@ -57,11 +75,27 @@
   position: sticky;
   top: 0;
   background-color: var(--surface);
+  white-space: nowrap;
 }
 
 .table td {
-  padding: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-xs);
   border-bottom: var(--border-width) solid var(--border);
+  /* Long OS strings and hostnames must not force the whole row wider.
+     220px measured best: auto table layout redistributes leftover space
+     unpredictably, and tightening this to 180px made the table *wider*
+     (1041px -> 1099px), not narrower. */
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The actions column must not be truncated — a clipped button is unusable. */
+.table td.actions {
+  max-width: none;
+  overflow: visible;
+  white-space: nowrap;
 }
 
 .table tbody tr:last-child td {
