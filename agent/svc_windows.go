@@ -32,6 +32,17 @@ func (s *agentSvc) Execute(args []string, r <-chan svc.ChangeRequest, changes ch
 	// 2. Run all startup logic (fingerprint, discovery, transport) in the background
 	stopCh := make(chan struct{})
 	go func() {
+		// One agent per host. The service, the guardian and any manually
+		// launched agent were all able to run at once, each evicting the
+		// others' dashboard socket. A second instance now exits immediately.
+		if ok, err := core.AcquireSingleInstance(); err != nil {
+			fmt.Printf("[WARN] single-instance check failed, continuing: %v\n", err)
+		} else if !ok {
+			fmt.Println("[ERROR] another AgentIde instance is already running on this host; exiting")
+			close(stopCh)
+			return
+		}
+
 		// Re-apply the anti-tamper DACL on every startup so protection
 		// survives a self-update (which temporarily widens the descriptor).
 		// Done here, after SERVICE_RUNNING, so it cannot delay the SCM.
@@ -101,6 +112,9 @@ func (s *guardSvc) Execute(args []string, r <-chan svc.ChangeRequest, changes ch
 			}
 		case <-done:
 			changes <- svc.Status{State: svc.StopPending}
+			// Release the Event Log handle before the SCM sees the service stop,
+			// so it is not left to a process exiting with an open log.
+			core.CloseEventLog()
 			return false, 0
 		}
 	}

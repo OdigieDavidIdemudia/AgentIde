@@ -61,6 +61,12 @@ func (l *Logger) write(level LogLevel, msg string, fields map[string]interface{}
 	}
 	data, _ := json.Marshal(entry)
 	fmt.Fprintln(l.writer, string(data))
+
+	// Mirror warnings and errors into the Windows Event Log. The source is
+	// registered at install time but nothing was ever written through it, so
+	// the entries the product advertises never appeared in Event Viewer or to
+	// anything collecting from it.
+	writeEventLog(level, msg, fields)
 }
 
 func (l *Logger) Info(msg string, fields map[string]interface{})  { l.write(LevelInfo, msg, fields) }
