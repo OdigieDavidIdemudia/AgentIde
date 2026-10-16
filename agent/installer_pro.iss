@@ -82,14 +82,20 @@ Filename: "{app}\agentide.exe"; Parameters: "--install --dashboard ""{code:GetDa
 
 ; Start the tray immediately so the notification-area icon is present the moment
 ; installation finishes, rather than only after the operator signs out and back
-; in. Deliberately NOT waituntilterminated: the tray runs for as long as the
-; session lasts, and waiting on it would hang the installer forever.
+; in.
+;
+; nowait is REQUIRED, and omitting it hung the installer. A [Run] entry waits for
+; the launched process to exit unless nowait is given; waituntilterminated only
+; imposes a timeout and does not mean "do not wait". The tray runs for as long as
+; the session lasts, so the installer waited on it indefinitely and never
+; finished. This went unnoticed for as long as the tray crashed on startup and
+; returned instantly, which is exactly the case where waiting is harmless.
 ;
 ; This launches in whatever session runs the installer. If that is session 0 —
 ; an unattended silent install from another machine — no tray icon can appear,
 ; because the notification area belongs to the interactive desktop. In that
 ; case the icon shows up when the endpoint's own user next signs in.
-Filename: "{app}\agentide-tray.exe"; Description: "Start the AgentIde tray icon"; Flags: runhidden
+Filename: "{app}\agentide-tray.exe"; Description: "Start the AgentIde tray icon"; Flags: runhidden nowait
 
 [Registry]
 ; Per-user auto-start is registered by the tray itself on first run, not here.
