@@ -1,5 +1,5 @@
-/* ───────────────────────────────────────────���─────────────────────────────────
-   Design tokens — neobrutalist / 8-bit
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ï¿½ï¿½ï¿½â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   Design tokens â€” neobrutalist / 8-bit
 
    The palette is deliberately unchanged: the mint accent (#00D4AA), the red
    fail (#FF4D4D) and the amber warn (#F5A623) are the product's identity and
@@ -9,10 +9,10 @@
 
    Rules this system follows:
    - every surface has a thick border and an un-blurred offset shadow
-   - no border-radius anywhere — nothing is rounded
+   - no border-radius anywhere â€” nothing is rounded
    - shadows are solid colour offsets, never blurred
    - buttons physically depress: the shadow collapses on :active
-   ───────────────────────────────────────────────────────────────────────────── */
+   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 :root {
   /* Spacing Tokens */
@@ -39,14 +39,18 @@
   --lh-relaxed: 1.7;
 
   /* Fonts.
-     Silkscreen and Press Start 2P are pixel faces, so headings read as 8-bit
-     without hurting legibility. Press Start 2P is extremely wide, so it is
-     reserved for short labels and badges; Silkscreen carries the headings.
-     Body copy stays on JetBrains Mono, which is already monospaced and keeps
-     dense technical tables readable at small sizes. */
+     The pixel faces are dialled back: every heading being a bitmap font read as
+     a costume rather than a design language, and the weight was getting in the
+     way of the dense technical tables this tool is full of.
+
+     Silkscreen now appears only on h1, where a single display face gives the
+     page an identity without turning every subheading into pixel art. Press
+          Start 2P is confined to short badges and labels. Body copy stays on
+     JetBrains Mono - it is already monospaced and keeps dense tables legible at
+     12px, where a pixel face turns to mud. */
   --font-pixel: 'Press Start 2P', 'Courier New', monospace;
   --font-display: 'Silkscreen', 'Space Grotesk', sans-serif;
-  --font-heading: 'Silkscreen', 'Space Grotesk', sans-serif;
+  --font-heading: 'Space Grotesk', sans-serif;
   --font-body: 'JetBrains Mono', monospace;
   --font-mono: 'JetBrains Mono', monospace;
 
@@ -62,7 +66,7 @@
   --n-800: #242424;
   --n-900: #141414;
 
-  /* Accent & Status Colors — unchanged from the previous scheme. */
+  /* Accent & Status Colors â€” unchanged from the previous scheme. */
   --accent: #00D4AA;
   --accent-hover: #00B38F;
   --accent-rgb: 0, 212, 170;
@@ -72,25 +76,25 @@
   --info: #F5A623;
 
   /* Accent for TEXT. The mint is deliberately light so it works as a fill
-     against dark ink, which makes it roughly 1.9:1 on the light background —
+     against dark ink, which makes it roughly 1.9:1 on the light background â€”
      far too low to read as text. This is the same hue darkened for that use,
      so accent-coloured text and accent fills stay visibly one colour family
      without making the text illegible. */
   --accent-text: #00A886;
 
-  /* Neobrutalist geometry. Radii are zero everywhere — the old 4px rounding
+  /* Neobrutalist geometry. Radii are zero everywhere â€” the old 4px rounding
      was the single most "soft" thing about the previous design. */
   --radius: 0px;
   --radius-sm: 0px;
-  --border-width: 3px;
-  --border-width-thick: 4px;
+  --border-width: 4px;
+  --border-width-thick: 5px;
 
-  /* Hard offset shadows. No blur, no spread — a solid block of ink offset by a
+  /* Hard offset shadows. No blur, no spread â€” a solid block of ink offset by a
      fixed number of pixels. This is what produces the printed-carte aesthetic
      instead of the ambient-blur look. */
-  --shadow-hard-sm: 3px 3px 0 0 var(--ink);
-  --shadow-hard: 5px 5px 0 0 var(--ink);
-  --shadow-hard-lg: 8px 8px 0 0 var(--ink);
+  --shadow-hard-sm: 4px 4px 0 0 var(--ink);
+  --shadow-hard: 6px 6px 0 0 var(--ink);
+  --shadow-hard-lg: 10px 10px 0 0 var(--ink);
   --shadow-none: none;
 
   /* Ink is the colour used for borders and shadow offsets. It is separate
@@ -115,7 +119,7 @@
    script, so there is no flash of the light theme before React mounts. The
    hard offset shadows only read properly against a dark ground, and the mint
    accent glows instead of sitting flat, so dark is also the better default
-   for this treatment — not just the more fashionable one. */
+   for this treatment â€” not just the more fashionable one. */
 :root {
   --bg: var(--n-900);
   --surface: var(--n-800);
@@ -128,7 +132,7 @@
   --text-secondary: var(--n-400);
 }
 
-/* Light Mode — opt in via data-theme="light". */
+/* Light Mode â€” opt in via data-theme="light". */
 [data-theme='light'] {
   --bg: var(--n-50);
   --surface: var(--n-100);
