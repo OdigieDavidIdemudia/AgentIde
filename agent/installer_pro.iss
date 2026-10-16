@@ -55,9 +55,25 @@ Name: "{group}\Uninstall AgentIDE"; Filename: "{uninstallexe}"; IconFilename: "{
 ; The optional --allow-reboot argument is appended only when the user opted in.
 Filename: "{app}\agentide.exe"; Parameters: "--install --dashboard ""{code:GetDashboardUrl}"" --token ""{code:GetAgentToken}"" --cert-pin ""{code:GetCertPin}""{code:GetAllowRebootArg}"; Flags: runhidden waituntilterminated; AfterInstall: VerifyDashboardConnection; StatusMsg: "Installing and starting the AgentIDE service..."
 
+; Start the tray immediately so the notification-area icon is present the moment
+; installation finishes, rather than only after the operator signs out and back
+; in. Deliberately NOT waituntilterminated: the tray runs for as long as the
+; session lasts, and waiting on it would hang the installer forever.
+;
+; This launches in whatever session runs the installer. If that is session 0 —
+; an unattended silent install from another machine — no tray icon can appear,
+; because the notification area belongs to the interactive desktop. In that
+; case the icon shows up when the endpoint's own user next signs in.
+Filename: "{app}\agentide-tray.exe"; Description: "Start the AgentIde tray icon"; Flags: runhidden
+
 [Registry]
-; Auto-start the tray app on user login
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "AgentIDE Tray"; ValueData: """{app}\agentide-tray.exe"""; Flags: uninsdeletevalue
+; Per-user auto-start is registered by the tray itself on first run, not here.
+;
+; Writing HKCU from the installer targets the *elevating administrator's* hive,
+; so any other operator signing in afterwards never got the icon. The tray
+; registers into the Run key of whichever account actually executes it, which
+; is what "the icon is always there" requires. The [Run] entry above starts it
+; once, which chains into that registration.
 
 [UninstallRun]
 Filename: "sc.exe"; Parameters: "stop AgentIde"; RunOnceId: "StopSvc"; Flags: runhidden waituntilterminated; StatusMsg: "Stopping AgentIDE service..."

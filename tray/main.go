@@ -27,6 +27,7 @@ import (
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
 	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 )
 
 const (
@@ -180,10 +181,54 @@ func main() {
 
 	mw.createTray()
 
+	// Register auto-start for *this* user.
+	//
+	// The installer writes HKCU\...\Run, but HKCU during an elevated install
+	// is the elevating administrator's hive, not the operator's. Any other user
+	// who signs in afterwards never gets the icon. Registering from the tray
+	// itself means the account actually running it gets auto-start, which is
+	// what "the icon is always there" requires.
+	registerAutoStart()
+
 	// Poll the agent's status pipe in the background and refresh the UI.
 	go mw.pollStatus()
 
 	mw.Run()
+}
+
+// runKey is the per-user auto-start location.
+const runKey = `Software\Microsoft\Windows\CurrentVersion\Run`
+
+// registerAutoStart ensures this user's Run key points at the tray, so the
+// notification icon returns after a reboot without a manual shortcut.
+//
+// Failures are logged and otherwise ignored: a missing icon is a papercut, and
+// refusing to run the tray because of a registry write would be worse.
+func registerAutoStart() {
+	exe, err := os.Executable()
+	if err != nil {
+		fmt.Printf("autostart: cannot resolve own path: %v\n", err)
+		return
+	}
+	command := "\"" + exe + "\""
+
+	k, _, err := registry.CreateKey(registry.CURRENT_USER, runKey, registry.SET_VALUE)
+	if err != nil {
+		fmt.Printf("autostart: cannot open Run key: %v\n", err)
+		return
+	}
+	defer k.Close()
+
+	// Only write when it differs, so the registry is not marked dirty on
+	// every launch.
+	if existing, _, err := k.GetStringValue("AgentIde Tray"); err == nil && existing == command {
+		return
+	}
+	if err := k.SetStringValue("AgentIde Tray", command); err != nil {
+		fmt.Printf("autostart: cannot write Run value: %v\n", err)
+		return
+	}
+	fmt.Printf("autostart: registered for %s\n", os.Getenv("USERNAME"))
 }
 
 // pollStatus connects to the agent's status pipe on a timer. A failed connect
@@ -233,6 +278,11 @@ func (mw *mainWindow) applyStatus(st agentStatus) {
 
 	if mw.trayIcon != nil {
 		mw.trayIcon.SetToolTip("AgentIde - " + text)
+		// Recolour the shield to match state so the icon itself carries
+		// information rather than being decoration.
+		if img, err := buildTrayIconWithBody(trayIconSize, trayIconForState(st.State)); err == nil {
+			mw.trayIcon.SetIcon(img)
+		}
 	}
 }
 
@@ -300,6 +350,19 @@ func (mw *mainWindow) createTray() {
 	}
 	mw.trayIcon = icon
 	icon.SetToolTip("AgentIde - Waiting for agent service")
+
+	// An icon with no image is invisible in the notification area. There is no
+	// .ico asset in the repository and the agent exe carries no icon resource,
+	// so the glyph is composed here instead — which also means it always matches
+	// the current theme rather than needing a design file kept in step with it.
+	if img, err := buildTrayIcon(trayIconSize); err == nil {
+		if err := icon.SetIcon(img); err != nil {
+			fmt.Printf("could not set tray icon: %v\n", err)
+		}
+	} else {
+		fmt.Printf("could not build tray icon: %v\n", err)
+	}
+
 	icon.SetVisible(true)
 
 	menu, err := walk.NewMenu()
