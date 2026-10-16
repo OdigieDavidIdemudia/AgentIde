@@ -13,6 +13,12 @@ type Config struct {
 	CertPin      string `json:"cert_pin"`
 	LogPath      string `json:"log_path"`
 	AllowReboot  bool   `json:"allow_reboot"`
+	// Group is the fleet segment this endpoint declares at enrollment. It
+	// follows the Wazuh model, where the agent states its group when it
+	// registers and the manager uses it to scope configuration — allowing one
+	// dashboard to apply different module policy per segment without
+	// reconfiguring endpoints individually.
+	Group string `json:"group,omitempty"`
 }
 
 // DefaultConfig returns a safe set of defaults used when no config.json is present.

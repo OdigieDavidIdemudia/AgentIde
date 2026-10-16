@@ -38,6 +38,10 @@ func main() {
 	unprotectFlag := flag.Bool("unprotect", false, "Internal: temporarily widen the service DACL for a self-update")
 	repairFlag := flag.Bool("repair", false, "Internal: ensure the services exist and are running (used by the scheduled task)")
 	allowReboot := flag.Bool("allow-reboot", false, "Allow AgentIde to reboot the system during Boot Gap testing")
+	// Fleet segment this endpoint belongs to, declared at enrollment. Empty
+	// means "default"; the dashboard stores it so configuration and module
+	// policy can be scoped per group.
+	groupFlag := flag.String("group", "", "Fleet group this agent belongs to (declared at enrollment)")
 	checkFlag := flag.Bool("check", false, "Test connectivity to -dashboard and exit (0 = reachable, 1 = unreachable)")
 	versionFlag := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
@@ -221,6 +225,11 @@ func main() {
 	// Only ever enable reboots; never clear a value persisted in config.json.
 	if *allowReboot {
 		cfg.AllowReboot = true
+	}
+	// An explicit --group overrides the persisted value. Empty means the
+	// endpoint stays in its configured group (or "default" if it has none).
+	if *groupFlag != "" {
+		cfg.Group = *groupFlag
 	}
 
 	// ── Windows Service vs Interactive CLI Detection ───────────────────────────

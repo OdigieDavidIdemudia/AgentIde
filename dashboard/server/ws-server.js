@@ -207,8 +207,8 @@ export function setupWebSockets(server) {
 async function handleFingerprint(msg, agentToken) {
   const p = msg.payload;
   const res = await pool.query(`
-    INSERT INTO agents (hostname, ip, mac, os, os_version, kernel_build, arch, status, mode, last_seen, token, dashboard_url, log_path, allow_reboot, agent_version)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, 'online', 'passive', NOW(), $8, $9, $10, $11, $12)
+    INSERT INTO agents (hostname, ip, mac, os, os_version, kernel_build, arch, status, mode, last_seen, token, dashboard_url, log_path, allow_reboot, agent_version, agent_group)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, 'online', 'passive', NOW(), $8, $9, $10, $11, $12, $13)
     ON CONFLICT (hostname, mac) DO UPDATE SET
       ip = EXCLUDED.ip,
       os = EXCLUDED.os,
@@ -218,12 +218,18 @@ async function handleFingerprint(msg, agentToken) {
       dashboard_url = COALESCE(EXCLUDED.dashboard_url, agents.dashboard_url),
       log_path = COALESCE(EXCLUDED.log_path, agents.log_path),
       allow_reboot = COALESCE(EXCLUDED.allow_reboot, agents.allow_reboot),
-      agent_version = COALESCE(EXCLUDED.agent_version, agents.agent_version)
+      agent_version = COALESCE(EXCLUDED.agent_version, agents.agent_version),
+      -- Group is declared by the agent at enrollment. COALESCE keeps an
+      -- already-assigned group when an older agent reconnects without sending
+      -- one, rather than silently resetting it to default on every reconnect.
+      agent_group = COALESCE(EXCLUDED.agent_group, agents.agent_group)
     RETURNING id
   `, [
     msg.agent_id, p.ip, p.mac, p.os, p.os_version, p.kernel_build, p.arch,
     agentToken || null, p.dashboard_url || null, p.log_path || null, p.allow_reboot ?? null,
     p.version || null,
+    // Absent on older agents; NULL lets the COALESCE above preserve.
+    p.group || null,
   ]);
   
   if (res.rows.length > 0) {

@@ -162,6 +162,14 @@ func fingerprintPayload(fp *fingerprint.Fingerprint, cfg *core.Config) map[strin
 	m["log_path"] = cfg.LogPath
 	m["allow_reboot"] = cfg.AllowReboot
 	m["version"] = version
+	// Declared at enrollment so the dashboard can scope configuration and
+	// module policy per fleet segment. Normalised here rather than at each use
+	// site, so "no group" and "the default group" are the same thing everywhere.
+	group := strings.TrimSpace(cfg.Group)
+	if group == "" {
+		group = "default"
+	}
+	m["group"] = group
 	return m
 }
 

@@ -89,6 +89,11 @@ export const migrate = async () => {
     // Agent build version, reported in the fingerprint payload. Used by the
     // fleet view to show which agents are behind the build the dashboard serves.
     await client.query(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS agent_version TEXT`);
+  // Agent-declared group at enrollment, following the Wazuh model where the
+  // agent states its group when it registers and the manager uses it to scope
+  // configuration. Lets one dashboard run different module policy per fleet
+  // segment without reconfiguring each endpoint.
+  await client.query(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS agent_group TEXT`);
     // Every security vendor discovered on the host. `vendor` stays as the
     // primary/first match for backwards compatibility; `vendors` holds the full
     // list so layered estates (Defender + a third-party sensor) are not hidden.
