@@ -52,13 +52,36 @@ echo.
 
 REM 1b. Build system tray companion app
 echo [1b/5] Building system tray companion (agentide-tray.exe)...
-cd tray
-go build -trimpath -ldflags="-s -w -X main.version=%VERSION% -X main.buildDate=%BUILDDATE%" -o ..\agentide-tray.exe .
+REM NOTE: the tray module lives at the repo root, NOT under agent\. This used to
+REM be "cd tray" from agent\, which silently failed (cmd's cd does not abort on a
+REM missing directory), leaving the cwd at agent\ and building the AGENT module
+REM into ..\agentide-tray.exe. The installer then packaged a second copy of
+REM agentide.exe as the tray, so a "tray" that was actually a duplicate agent
+REM service shipped to the VM. The existence checks below turn that into a hard
+REM failure rather than a wrong binary.
+if not exist "..\tray\go.mod" (
+    echo ERROR: tray module not found at ..\tray - expected %CD%\..\tray\go.mod
+    exit /b 1
+)
+REM -H windowsgui keeps a console window from flashing when the tray is started
+REM by hand. The installer passes runhidden, but a manual launch should behave
+REM the same way.
+pushd ..\tray
+go build -trimpath -ldflags="-s -w -H windowsgui -X main.version=%VERSION% -X main.buildDate=%BUILDDATE%" -o ..\agent\agentide-tray.exe .
 if %ERRORLEVEL% neq 0 (
+    popd
     echo ERROR: Tray build failed
     exit /b 1
 )
-cd ..
+popd
+REM Confirm the artefact is really the tray. A copy of agentide.exe here would
+REM mean the build silently regressed to the bug above, and it is cheap to
+REM check: the tray links systray, the agent does not.
+findstr /m /c:"getlantern/systray" agentide-tray.exe >nul
+if %ERRORLEVEL% neq 0 (
+    echo ERROR: agentide-tray.exe does not contain the systray symbol - the tray build is wrong
+    exit /b 1
+)
 echo Binary: agentide-tray.exe
 for %%f in (agentide-tray.exe) do echo Size: %%~zf bytes
 CertUtil -hashfile agentide-tray.exe SHA256
@@ -84,7 +107,10 @@ if defined ISCC (
     echo [2/4] Building professional installer...
     echo   using %ISCC%
     "%ISCC%" installer_pro.iss /DAppVersion=%VERSION%
-    if %ERRORLEVEL% neq 0 (
+    REM !ERRORLEVEL! not %ERRORLEVEL%: inside a parenthesised block the latter is
+    REM expanded when the block is parsed, i.e. before ISCC has run, so a failed
+    REM compile was silently swallowed and the build still printed COMPLETE.
+    if !ERRORLEVEL! neq 0 (
         echo ERROR: Inno Setup compilation failed
         exit /b 1
     )
@@ -104,8 +130,14 @@ echo [2b/4] Building MSI package...
 where dotnet >nul 2>&1
 if %ERRORLEVEL% equ 0 (
     call build_msi.bat
-    if %ERRORLEVEL% neq 0 (
-        echo WARNING: MSI build failed - continuing with the Inno installer
+    REM !ERRORLEVEL! not %ERRORLEVEL%: this sits inside the block opened on the
+    REM line above, so %ERRORLEVEL% would be the value from before build_msi.bat
+    REM ran. A failed MSI build is fatal rather than a warning, because leaving
+    REM a stale MSI in msi_output is precisely the version drift this step was
+    REM added to prevent.
+    if !ERRORLEVEL! neq 0 (
+        echo ERROR: MSI build failed - aborting rather than leaving a stale MSI in msi_output
+        exit /b 1
     )
 ) else (
     echo WARNING: dotnet SDK not found - skipping MSI.

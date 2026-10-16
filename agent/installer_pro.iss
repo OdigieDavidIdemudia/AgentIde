@@ -16,6 +16,31 @@
   #error AppVersion is not defined - build via build_pro.bat (or pass /DAppVersion=x.y.z)
 #endif
 
+; Guard against packaging a missing or truncated tray.
+;
+; build_pro.bat once did "cd tray" from this directory, but the tray module
+; lives at the repo root rather than under agent\. cmd's cd does not abort on a
+; missing directory, so the step silently built the AGENT module and wrote it to
+; ..\agentide-tray.exe. This installer then shipped a byte-for-byte copy of
+; agentide.exe as the tray: a "tray icon" that was actually a second copy of the
+; agent service.
+;
+; The duplicate case itself is caught in build_pro.bat, which greps the artefact
+; for the systray symbol that only the real tray links. A direct FileSize
+; comparison between the two binaries was tried here as a standalone check and
+; removed: ISPP evaluates two FileSize calls in one expression incorrectly and
+; reports different-sized files as equal, so the guard would have been worse
+; than no guard. What remains covers the cases ISPP can answer honestly.
+#if !FileExists("agentide-tray.exe")
+  #error agentide-tray.exe is missing - build it via build_pro.bat (step 1b) before compiling
+#endif
+#if !FileExists("agentide.exe")
+  #error agentide.exe is missing - build it via build_pro.bat (step 1) before compiling
+#endif
+#if FileSize("agentide-tray.exe") < 500000
+  #error agentide-tray.exe is implausibly small - the tray build is truncated or is not the real tray
+#endif
+
 [Setup]
 AppName=AgentIDE
 ; Version comes from version.json (via /DAppVersion passed by build_pro.bat) so
