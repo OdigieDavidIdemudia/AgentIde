@@ -1,8 +1,20 @@
 [
   {
     "vendor": "Cortex XDR",
-    "processes": ["cyserver.exe", "pmd.exe", "CyveraConsole.exe", "pmd"],
-    "services": ["CyveraService", "CyveraKernel"]
+    "processes": ["cyserver.exe", "CyveraConsole.exe", "pmd.exe", "pmd"],
+    "services": [
+      "tlaservice",
+      "tedrdrv",
+      "cyveraservice",
+      "cyverak",
+      "cypatchdrv",
+      "cyvrfsfd",
+      "cyvrmtgn",
+      "telam",
+      "tedrpers",
+      "tdevflt",
+      "twdservice"
+    ]
   },
   {
     "vendor": "CrowdStrike Falcon",

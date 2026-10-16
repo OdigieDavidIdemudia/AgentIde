@@ -10,9 +10,9 @@ import (
 	"strings"
 )
 
-// listProcesses reads /proc to enumerate all running processes.
+// enumerateProcesses reads /proc to enumerate all running processes.
 // Returns a map of process name (lowercase) -> processEntry.
-func listProcesses() (map[string]processEntry, error) {
+func enumerateProcesses() (map[string]processEntry, error) {
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
 		return nil, fmt.Errorf("cannot read /proc: %w", err)
@@ -42,9 +42,9 @@ func listProcesses() (map[string]processEntry, error) {
 	return result, nil
 }
 
-// listServices queries systemd via the systemctl command to list all active units.
+// enumerateServices queries systemd via the systemctl command to list all active units.
 // Returns a map of service unit name (lowercase, without .service) -> display name.
-func listServices() (map[string]string, error) {
+func enumerateServices() (map[string]string, error) {
 	data, err := os.ReadFile("/proc/1/comm")
 	if err != nil || strings.TrimSpace(string(data)) != "systemd" {
 		return listServicesFromProc()

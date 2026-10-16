@@ -10,8 +10,8 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// listProcesses returns a map of process name (lowercase) -> processEntry for all running processes.
-func listProcesses() (map[string]processEntry, error) {
+// enumerateProcesses returns a map of process name (lowercase) -> processEntry for all running processes.
+func enumerateProcesses() (map[string]processEntry, error) {
 	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
 		return nil, fmt.Errorf("CreateToolhelp32Snapshot failed: %w", err)
@@ -41,8 +41,8 @@ func listProcesses() (map[string]processEntry, error) {
 	return result, nil
 }
 
-// listServices returns a map of service name (lowercase) -> display name for all running services.
-func listServices() (map[string]string, error) {
+// enumerateServices returns a map of service name (lowercase) -> display name for all running services.
+func enumerateServices() (map[string]string, error) {
 	manager, err := windows.OpenSCManager(nil, nil, windows.SC_MANAGER_ENUMERATE_SERVICE)
 	if err != nil {
 		return nil, fmt.Errorf("OpenSCManager failed: %w", err)
