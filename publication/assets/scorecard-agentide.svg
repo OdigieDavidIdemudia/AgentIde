@@ -2,56 +2,75 @@
   <title id="score-title">Assessment scorecard</title>
   <desc id="score-desc">Eight module results from a blackbox run against Microsoft Defender: five passed, one timed out, and two failed, for a score of 62.5 percent.</desc>
 
-  <rect width="1200" height="460" fill="#F4F2EC"/>
+  <rect width="1200" height="460" fill="#141414"/>
 
-  <text x="40" y="50" font-family="Consolas, 'Courier New', monospace" font-size="15" letter-spacing="3" fill="#6B6B66">ASSESSMENT RESULT &#183; BLACKBOX &#183; 2026-10-05</text>
+  <text x="40" y="48" font-family="Consolas, 'Courier New', monospace" font-size="14" letter-spacing="3" fill="#A8A8A8">ASSESSMENT RESULT &#183; BLACKBOX &#183; 2026-10-05</text>
 
-  <text x="40" y="146" font-family="Consolas, 'Courier New', monospace" font-size="72" font-weight="bold" fill="#141414">62.5%</text>
-  <text x="44" y="178" font-family="Consolas, 'Courier New', monospace" font-size="15" letter-spacing="2" fill="#B45309">5 OF 8 MODULES PASSED</text>
+  <text x="40" y="146" font-family="Consolas, 'Courier New', monospace" font-size="72" font-weight="bold" fill="#00D4AA">62.5%</text>
+  <text x="44" y="178" font-family="Consolas, 'Courier New', monospace" font-size="14" letter-spacing="2" fill="#F5A623">5 OF 8 MODULES PASSED</text>
 
-  <rect x="40" y="202" width="1120" height="4" fill="#141414"/>
+  <!-- score bar -->
+  <g>
+    <rect x="760" y="112" width="400" height="14" fill="#3A3A3A"/>
+    <rect x="760" y="112" width="245" height="14" fill="#00D4AA"/>
+    <rect x="1005" y="112" width="49" height="14" fill="#F5A623"/>
+    <rect x="1054" y="112" width="106" height="14" fill="#FF4D4D"/>
+    <text x="760" y="152" font-family="Consolas, 'Courier New', monospace" font-size="11" letter-spacing="1" fill="#00D4AA">PASS 5</text>
+    <text x="875" y="152" font-family="Consolas, 'Courier New', monospace" font-size="11" letter-spacing="1" fill="#F5A623">TIMEOUT 1</text>
+    <text x="1000" y="152" font-family="Consolas, 'Courier New', monospace" font-size="11" letter-spacing="1" fill="#FF4D4D">FAIL 2</text>
+  </g>
+
+  <rect x="40" y="200" width="1120" height="4" fill="#FAFAFA"/>
 
   <g font-family="Consolas, 'Courier New', monospace">
     <!-- row 1 -->
-    <rect x="70" y="226" width="250" height="96" fill="#FAFAF7" stroke="#141414" stroke-width="4"/>
-    <rect x="70" y="226" width="250" height="8" fill="#B45309"/>
-    <text x="86" y="266" font-size="16" fill="#141414">performance</text>
-    <text x="86" y="298" font-size="18" font-weight="bold" fill="#B45309">TIMEOUT</text>
+    <rect x="75" y="231" width="250" height="96" fill="#000000"/>
+    <rect x="70" y="226" width="250" height="96" fill="#242424" stroke="#FAFAFA" stroke-width="4"/>
+    <rect x="72" y="228" width="246" height="8" fill="#F5A623"/>
+    <text x="86" y="266" font-size="16" fill="#FAFAFA">performance</text>
+    <text x="86" y="298" font-size="18" font-weight="bold" fill="#F5A623">! TIMEOUT</text>
 
-    <rect x="340" y="226" width="250" height="96" fill="#FAFAF7" stroke="#141414" stroke-width="4"/>
-    <rect x="340" y="226" width="250" height="8" fill="#B91C1C"/>
-    <text x="356" y="266" font-size="16" fill="#141414">malware</text>
-    <text x="356" y="298" font-size="18" font-weight="bold" fill="#B91C1C">FAIL</text>
+    <rect x="345" y="231" width="250" height="96" fill="#000000"/>
+    <rect x="340" y="226" width="250" height="96" fill="#242424" stroke="#FAFAFA" stroke-width="4"/>
+    <rect x="342" y="228" width="246" height="8" fill="#FF4D4D"/>
+    <text x="356" y="266" font-size="16" fill="#FAFAFA">malware</text>
+    <text x="356" y="298" font-size="18" font-weight="bold" fill="#FF4D4D">&#10005; FAIL</text>
 
-    <rect x="610" y="226" width="250" height="96" fill="#FAFAF7" stroke="#141414" stroke-width="4"/>
-    <rect x="610" y="226" width="250" height="8" fill="#15803D"/>
-    <text x="626" y="266" font-size="16" fill="#141414">lolbin</text>
-    <text x="626" y="298" font-size="18" font-weight="bold" fill="#15803D">PASS</text>
+    <rect x="615" y="231" width="250" height="96" fill="#000000"/>
+    <rect x="610" y="226" width="250" height="96" fill="#242424" stroke="#FAFAFA" stroke-width="4"/>
+    <rect x="612" y="228" width="246" height="8" fill="#00D4AA"/>
+    <text x="626" y="266" font-size="16" fill="#FAFAFA">lolbin</text>
+    <text x="626" y="298" font-size="18" font-weight="bold" fill="#00D4AA">&#10003; PASS</text>
 
-    <rect x="880" y="226" width="250" height="96" fill="#FAFAF7" stroke="#141414" stroke-width="4"/>
-    <rect x="880" y="226" width="250" height="8" fill="#15803D"/>
-    <text x="896" y="266" font-size="16" fill="#141414">network</text>
-    <text x="896" y="298" font-size="18" font-weight="bold" fill="#15803D">PASS</text>
+    <rect x="885" y="231" width="250" height="96" fill="#000000"/>
+    <rect x="880" y="226" width="250" height="96" fill="#242424" stroke="#FAFAFA" stroke-width="4"/>
+    <rect x="882" y="228" width="246" height="8" fill="#00D4AA"/>
+    <text x="896" y="266" font-size="16" fill="#FAFAFA">network</text>
+    <text x="896" y="298" font-size="18" font-weight="bold" fill="#00D4AA">&#10003; PASS</text>
 
     <!-- row 2 -->
-    <rect x="70" y="338" width="250" height="96" fill="#FAFAF7" stroke="#141414" stroke-width="4"/>
-    <rect x="70" y="338" width="250" height="8" fill="#15803D"/>
-    <text x="86" y="378" font-size="16" fill="#141414">identity</text>
-    <text x="86" y="410" font-size="18" font-weight="bold" fill="#15803D">PASS</text>
+    <rect x="75" y="343" width="250" height="96" fill="#000000"/>
+    <rect x="70" y="338" width="250" height="96" fill="#242424" stroke="#FAFAFA" stroke-width="4"/>
+    <rect x="72" y="340" width="246" height="8" fill="#00D4AA"/>
+    <text x="86" y="378" font-size="16" fill="#FAFAFA">identity</text>
+    <text x="86" y="410" font-size="18" font-weight="bold" fill="#00D4AA">&#10003; PASS</text>
 
-    <rect x="340" y="338" width="250" height="96" fill="#FAFAF7" stroke="#141414" stroke-width="4"/>
-    <rect x="340" y="338" width="250" height="8" fill="#15803D"/>
-    <text x="356" y="378" font-size="16" fill="#141414">antitamper</text>
-    <text x="356" y="410" font-size="18" font-weight="bold" fill="#15803D">PASS</text>
+    <rect x="345" y="343" width="250" height="96" fill="#000000"/>
+    <rect x="340" y="338" width="250" height="96" fill="#242424" stroke="#FAFAFA" stroke-width="4"/>
+    <rect x="342" y="340" width="246" height="8" fill="#00D4AA"/>
+    <text x="356" y="378" font-size="16" fill="#FAFAFA">antitamper</text>
+    <text x="356" y="410" font-size="18" font-weight="bold" fill="#00D4AA">&#10003; PASS</text>
 
-    <rect x="610" y="338" width="250" height="96" fill="#FAFAF7" stroke="#141414" stroke-width="4"/>
-    <rect x="610" y="338" width="250" height="8" fill="#15803D"/>
-    <text x="626" y="378" font-size="16" fill="#141414">falsepositive</text>
-    <text x="626" y="410" font-size="18" font-weight="bold" fill="#15803D">PASS</text>
+    <rect x="615" y="343" width="250" height="96" fill="#000000"/>
+    <rect x="610" y="338" width="250" height="96" fill="#242424" stroke="#FAFAFA" stroke-width="4"/>
+    <rect x="612" y="340" width="246" height="8" fill="#00D4AA"/>
+    <text x="626" y="378" font-size="16" fill="#FAFAFA">falsepositive</text>
+    <text x="626" y="410" font-size="18" font-weight="bold" fill="#00D4AA">&#10003; PASS</text>
 
-    <rect x="880" y="338" width="250" height="96" fill="#FAFAF7" stroke="#141414" stroke-width="4"/>
-    <rect x="880" y="338" width="250" height="8" fill="#B91C1C"/>
-    <text x="896" y="378" font-size="16" fill="#141414">reboot</text>
-    <text x="896" y="410" font-size="18" font-weight="bold" fill="#B91C1C">FAIL</text>
+    <rect x="885" y="343" width="250" height="96" fill="#000000"/>
+    <rect x="880" y="338" width="250" height="96" fill="#242424" stroke="#FAFAFA" stroke-width="4"/>
+    <rect x="882" y="340" width="246" height="8" fill="#FF4D4D"/>
+    <text x="896" y="378" font-size="16" fill="#FAFAFA">reboot</text>
+    <text x="896" y="410" font-size="18" font-weight="bold" fill="#FF4D4D">&#10005; FAIL</text>
   </g>
 </svg>
