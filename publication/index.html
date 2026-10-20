@@ -14,42 +14,55 @@
       --shadow-hard: 5px 5px 0 var(--ink);
       --pass: #15803D;
       --fail: #B91C1C;
+      --warn: #B45309;
     }
 
     * { box-sizing: border-box; }
 
     html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
+    /* === Theme (mirror browser-extension-control) === */
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #141414; --surface: #1E1E1E; --raised: #242424;
+        --fg: #FAFAFA; --fg-2: #9A9A9A; --line: #2E2E2E;
+        --accent: #8B86F5; --warn: #F0B429;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #141414; --surface: #1E1E1E; --raised: #242424;
+      --fg: #FAFAFA; --fg-2: #9A9A9A; --line: #2E2E2E;
+      --accent: #8B86F5; --warn: #F0B429;
+    }
+    :root[data-theme="dark"] { color-scheme: dark; }
+    :root[data-theme="light"] { color-scheme: light; }
+
     body {
       margin: 0;
-      padding: 40px 44px 96px;
-      background: var(--surface);
-      color: var(--ink);
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: Inter, system-ui, -apple-system, sans-serif;
       font-size: 11pt;
       line-height: 1.6;
-      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
     }
 
-    @media (prefers-reduced-motion: reduce) {
-      * { transition: none !important; }
-    }
-
-    /* ── 8bit / Neobrutalist base ── */
-    .neon-text { text-shadow: 2px 2px 0 var(--muted); }
-    .rule-border { border: 2px solid var(--rule); }
-    .accent-border { border: 3px solid var(--accent); }
-
-    /* ── Type scales ── */
+    /* === Type scales === */
     .type-xs { font-size: 8pt; }
     .type-sm { font-size: 9pt; }
     .type-base { font-size: 11pt; }
     .type-lg { font-size: 13pt; }
     .type-h2 { font-size: 16pt; }
 
-    /* ── Structure: numbered sections with accent in margin ── */
-    .section { padding: 32px 0; border-bottom: 2px solid var(--rule); }
-    .section:last-of-type { border-bottom: 0; }
+    /* === 8bit / Neobrutalist base === */
+    .neon-text { text-shadow: 2px 2px 0 var(--muted); }
+    .rule-border { border: 2px solid var(--rule); }
+    .accent-border { border: 3px solid var(--accent); }
+
+    /* === Numbered sections with accent in margin === */
+    .section { margin-bottom: 48px; border-top: 2px solid var(--line); padding-top: 48px; }
+    .section:first-of-type { border-top: 0; padding-top: 0; }
+    .section:last-of-type { margin-bottom: 0; }
     .section .num {
       font-family: 'JetBrains Mono', monospace;
       font-size: 10pt;
@@ -57,7 +70,7 @@
       color: var(--accent);
       letter-spacing: 0.1em;
       display: block;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
     .section .head {
       font-family: 'Space Grotesk', sans-serif;
@@ -67,8 +80,8 @@
     }
     .section .prose { color: var(--muted); margin-bottom: 16px; }
 
-    /* ── Hero / Cover ── */
-    .cover { border-bottom: 2px solid var(--rule); padding-bottom: 24px; margin-bottom: 32px; }
+    /* === Hero / Cover (mirror browser-extension-control hero-frame) === */
+    .cover { position: relative; padding: 48px 0 32px; }
     .cover .brand { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
     .cover .brand-mark {
       display: inline-flex; align-items: center; justify-content: center;
@@ -79,53 +92,83 @@
     .cover .brand-name { font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; font-size: 9pt; }
     .cover h1 { margin: 0 0 6px; font-size: 18pt; letter-spacing: -0.01em; }
     .cover-sub { margin: 0 0 12px; color: var(--muted); font-size: 9pt; }
+    /* THE ONLY element that earns the hard shadow — the hero frame */
+    .hero-frame {
+      border: 3px solid var(--ink);
+      border-radius: 4px;
+      box-shadow: var(--shadow-hard);
+      background: var(--surface);
+      padding: 24px;
+      margin: 24px 0;
+    }
+    .hero-frame img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .hero-frame:hover { box-shadow: 2px 2px 0 var(--ink); }
 
-    /* ── Problem ── */
-    .problem h2 { margin: 0 0 8px; font-size: 14pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
-    .problem p { margin: 0; color: var(--muted); }
+    /* === Eyebrow (mirror .eyebrow from reference) === */
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 8pt; font-weight: 700;
+      letter-spacing: .1em; text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+    .eyebrow::before { content: ""; width: 32px; height: 3px; background: var(--accent); }
 
-    /* ── Architecture ── */
-    .architecture .arch-list { list-style: none; padding: 0; margin: 0; }
-    .architecture .arch-list li { margin: 6px 0; padding: 6px 12px; background: var(--rule); border: 1px solid var(--rule); }
-    .architecture .arch-list .label { font-weight: 700; color: var(--accent); }
+    /* === Section dividers: rules, not boxes === */
+    .section + section { border-top: 2px solid var(--line); padding-top: 48px; margin-top: 48px; }
+    .rule { height: 2px; background: var(--fg); border: 0; margin: 48px 0; }
 
-    /* ── How Assessment Runs ── */
-    .lifecycle .lifecycle-ol { list-style: decimal; padding-left: 24px; margin: 0; }
-    .lifecycle .lifecycle-ol li { margin: 4px 0; }
+    /* === Tags: outline only, no filled badges === */
+    .tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 24px 0; }
+    .tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 8pt; font-weight: 700;
+      letter-spacing: .1em; text-transform: uppercase;
+      padding: 2px 8px;
+      border: 2px solid var(--fg);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--fg);
+    }
+    .tag--accent { color: var(--accent); border-color: var(--accent); }
 
-    /* ── Findings Table ── */
+    /* === Findings table: rules, not boxes === */
     .findings-table table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 10pt; }
     .findings-table th, .findings-table td { padding: 6px 8px; border: 1px solid var(--rule); }
     .findings-table th { background: var(--accent); color: var(--ink); font-weight: 700; }
     .findings-table .result-pass { color: var(--pass); font-weight: 700; }
     .findings-table .result-fail { color: var(--fail); font-weight: 700; }
 
-    /* ── MITRE Coverage ── */
-    .mitre-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-top: 12px; }
+    /* === MITRE Grid === */
+    .mitre-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 12px; }
     .mitre-card { padding: 8px; background: var(--surface); border: 1px solid var(--rule); }
-    .mitre-card.pass { border-left: 3px solid var(--pass); }
-    .mitre-card.fail { border-left: 3px solid var(--fail); }
+    .mitre-card.pass { border-left: 3px var(--pass); }
+    .mitre-card.fail { border-left: 3px var(--fail); }
     .mitre-card .name { font-weight: 700; font-size: 9pt; }
     .mitre-card .tactic { font-size: 7.5pt; text-transform: uppercase; color: var(--muted); }
 
-    /* ── Agent Capabilities ── */
+    /* === Agent Capabilities === */
     .capabilities ul { list-style: none; padding: 0; margin: 0; }
     .capabilities li { margin: 4px 0; padding: 4px 8px; background: var(--rule); border: 1px solid var(--rule); }
 
-    /* ── Limitations ── */
+    /* === Limitations === */
     .limitations ul { list-style: none; padding: 0; margin: 0; }
     .limitations li { margin: 4px 0; padding: 4px 8px; background: var(--surface); border: 1px solid var(--rule); }
 
-    /* ── Attribution ── */
+    /* === Attribution === */
     .attribution h2 { margin: 0 0 6px; font-size: 14pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
     .attribution p { margin: 0; color: var(--muted); font-size: 9pt; }
 
-    /* ── Footer / Dual Use ── */
+    /* === Footer / Dual Use === */
     .footer { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 44px; background: var(--surface); border-top: 2px solid var(--rule); color: var(--muted); font-size: 7.5pt; }
 
-    /* ── 8bit bullet ── */
+    /* === 8bit bullet === */
     .bullet { color: var(--accent); font-size: 10pt; line-height: 1; }
-    .bullet-main { font-size: 12pt; }
 
     @media (max-width: 768px) {
       body { padding: 24px; }
@@ -138,13 +181,20 @@
 <body>
 
   <!-- /‑ hero ―─────────────────────────────────────────────────────────── -->
-  <header class="cover rule-border">
+  <header class="cover">
     <div class="brand">
       <span class="brand-mark" aria-hidden="true">AI</span>
       <span class="brand-name neon-text">AgentIde</span>
     </div>
     <h1>Assessment Documentation</h1>
     <p class="cover-sub">EDR/XDR Module‑Driven Assessment — Proof of Concept</p>
+    <!-- THE ONLY element with hard shadow — the hero frame below -->
+    <div class="hero-frame">
+      <img src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><rect width='200' height='200' fill='%23141414'/><rect x='40' y='40' width='120' height='120' fill='none' stroke='%23B45309' stroke-width='8'/><rect x='70' y='70' width '40' height='40' fill='%23B45309'/></svg>" alt="AgentIde neobrutalist assessment framework">
+    </div>
+    <!-- Eyebrow: minimal rule + mono label, no filled badge -->
+    <div class="eyebrow">Reference implementation</div>
+    <!-- Dual-use warning: above the fold, not buried -->
     <div class="warn" role="note" aria-labelledby="warn-h">
       <h2 id="warn-h">Education purpose only</h2>
       <p>This framework is published for educational and research purposes. It demonstrates how adversary techniques can be assessed against endpoint security products. Do not use against systems you do not own or have written authorisation to test. Unauthorised use may breach computer-misuse laws and employment terms.</p>
@@ -152,7 +202,7 @@
   </header>
 
   <!-- /‑ 01 problem ―──────────────────────────────────────────────────── -->
-  <section class="section">
+  <section class="section" id="problem">
     <span class="num">01</span>
     <div class="head">The Problem</div>
     <p>Most endpoint security products claim to "detect and resist" adversary techniques, but operators have no independent way to verify what actually stops at the endpoint. AgentIde fills this gap with a module‑driven assessment that maps every result to MITRE ATT&CK, producing auditable severity scores, findings, and reports — all without model generation.</p>
@@ -160,7 +210,7 @@
   </section>
 
   <!-- /‑ 02 architecture ―───────────────────────────────────────────────── -->
-  <section class="section">
+  <section class="section" id="architecture">
     <span class="num">02</span>
     <div class="head">Architecture</div>
     <ul class="arch-list">
@@ -172,7 +222,7 @@
   </section>
 
   <!-- /‑ 03 how an assessment runs ―─────────────────────────────────────── -->
-  <section class="section">
+  <section class="section" id="lifecycle">
     <span class="num">03</span>
     <div class="head">How an Assessment Runs</div>
     <ol class="lifecycle-ol">
@@ -185,7 +235,7 @@
   </section>
 
   <!-- /‑ 04 findings ―──────────────────────────────────────────────────── -->
-  <section class="section">
+  <section class="section" id="findings">
     <span class="num">04</span>
     <div class="head">Findings</div>
     <p>Assessment run on <b>DESKTOP‑L07M1SS</b> (Microsoft Defender), exported 2026‑10‑05. Eight modules were tested against the endpoint using a blackbox profile.</p>
@@ -207,10 +257,17 @@
     </table>
 
     <p class="prose"><strong>Score:</strong> 5 passed / 8 modules (62.5%) · 3 failures · 1 kill/recovery event (agent killed and auto‑recovered after 45m32s)</p>
+
+    <!-- Tags: outline only, no filled badges -->
+    <div class="tags">
+      <span class="tag tag--accent">blackbox</span>
+      <span class="tag">MITRE‑mapped</span>
+      <span class="tag">deterministic</span>
+    </div>
   </section>
 
   <!-- /‑ 05 mitre coverage ―─────────────────────────────────────────────── -->
-  <section class="section">
+  <section class="section" id="mitre">
     <span class="num">05</span>
     <div class="head">MITRE ATT&CK Coverage</div>
     <div class="mitre-grid">
@@ -225,7 +282,7 @@
   </section>
 
   <!-- /‑ 06 agent capabilities ―─────────────────────────────────────────── -->
-  <section class="section">
+  <section class="section" id="capabilities">
     <span class="num">06</span>
     <div class="head">What the Agent Can Do</div>
     <ul>
@@ -240,7 +297,7 @@
   </section>
 
   <!-- /‑ 07 limitations ―────────────────────────────────────────────────── -->
-  <section class="section">
+  <section class="section" id="limits">
     <span class="num">07</span>
     <div class="head">Limitations & Out of Scope</div>
     <ul>
@@ -253,7 +310,7 @@
   </section>
 
   <!-- /‑ 08 attribution ―────────────────────────────────────────────────── -->
-  <section class="section">
+  <section class="section" id="attribution">
     <span class="num">08</span>
     <div class="head">Attribution</div>
     <p><strong>Author:</strong> David Idemudia Odige — <a href="https://github.com/OdigieDavidIdemudia">@OdigieDavidIdemudia</a></p>
@@ -262,7 +319,8 @@
     <p><strong>Assessment data:</strong> SOC assessment run on DESKTOP‑L07M1SS, exported 2026‑10‑05. 8 modules tested, 5 resisted, 3 failed. Full findings and MITRE mappings are published above.</p>
   </section>
 
-  <!-- /‑ footer / dual-use warning ―─────────────────────────────────────── -->
+  <!-- /‑ rule + footer ―─────────────────────────────────────────────────── -->
+  <hr class="rule">
   <footer class="footer">
     <strong>Dual‑use warning:</strong> AgentIDE stops security services, kills vendor processes, and installs a hardened SYSTEM service that resists removal. Use only on systems you own or have written authorisation to test. Unauthorised use is illegal. <strong>Assessment methodology and scoring model are published — operational detail is withheld.</strong>
   </footer>
