@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AgentIde — Measuring What Endpoint Security Actually Stops</title>
+  <title>AgentIde — Assessment Documentation</title>
   <style>
     :root {
       --ink: #141414;
@@ -14,10 +14,9 @@
       --shadow-hard: 5px 5px 0 var(--ink);
       --pass: #15803D;
       --fail: #B91C1C;
-      --partial: #B45309;
     }
 
-    *, *::before, *::after { box-sizing: border-box; }
+    * { box-sizing: border-box; }
 
     html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
@@ -36,287 +35,229 @@
       * { transition: none !important; }
     }
 
-    /* ── Hero / Cover ── */
-    .cover { border-bottom: 2px solid var(--rule); padding-bottom: 24px; margin-bottom: 32px; }
-    .cover .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
-    .cover .brand-mark {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 28px; height: 28px;
-      background: var(--accent); color: var(--ink);
-      font-weight: 700; font-size: 10pt;
-    }
-    .cover .brand-name { font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; font-size: 10pt; }
-    .cover h1 { margin: 0 0 8px; font-size: 22pt; letter-spacing: -0.01em; }
-    .cover-sub { margin: 0 0 20px; color: var(--muted); font-size: 10pt; }
-
-    /* ── Problem ── */
-    .problem { margin: 32px 0; }
-    .problem h2 { margin: 0 0 12px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
-    .problem p { margin: 0; color: var(--muted); }
-
-    /* ── Architecture ── */
-    .architecture { margin: 32px 0; }
-    .architecture h2 { margin: 0 0 12px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
-    .arch-list { list-style: none; padding: 0; margin: 0; }
-    .arch-list li { margin: 8px 0; padding: 8px 12px; background: var(--rule); border: 1px solid var(--rule); }
-    .arch-list .label { font-weight: 700; color: var(--accent); }
-
-    /* ── Assessment Results ── */
-    .results { margin: 32px 0; }
-    .results h2 { margin: 0 0 12px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
-    .results table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-    .results th, .results td { padding: 8px 12px; border: 1px solid var(--rule); text-align: left; font-size: 10pt; }
-    .results th { background: var(--accent); color: var(--ink); font-weight: 700; }
-    .result-pill { padding: 2px 6px; border-radius: 3px; font-size: 9pt; font-weight: 700; }
-    .result-pill.pass { background: #d1e7dd; color: var(--pass); }
-    .result-pill.fail { background: #f8d7da; color: var(--fail); }
-    .result-pill.passive { background: #fff; color: var(--muted); }
-
-    /* ── MITRE Coverage ── */
- .mitre { margin: 32px 0; }
-    .mitre h2 { margin: 0 0 12px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
-    .mitre-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 16px; }
-    .mitre-card { padding: 12px; background: var(--surface); border: 1px solid var(--rule); }
-    .mitre-card.pass { border-left: 3px solid var(--pass); }
-    .mitre-card.fail { border-left: 3px solid var(--fail); }
-    .mitre-card .name { font-weight: 700; font-size: 10pt; }
-    .mitre-card .tactic { font-size: 8pt; text-transform: uppercase; color: var(--muted); }
-
-    /* ── Deployment Integrity ── */
-    .integrity { margin: 32px 0; }
-    .integrity h2 { margin: 0 0 12px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
-    .integrity ul { list-style: none; padding: 0; margin: 0; }
-    .integrity li { margin: 6px 0; padding: 6px 12px; background: var(--surface); border: 1px solid var(--rule); position: relative; }
-    .integrity li::before {
-      content: '●';
-      position: absolute;
-      left: 12px;
-      color: var(--accent);
-      font-size: 8pt;
-    }
-
-    /* ── Agent Capabilities ── */
-    .capabilities { margin: 32px 0; }
-    .capabilities h2 { margin: 0 0 12px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
-    .capabilities ul { list-style: none; padding: 0; margin: 0; }
-    .capabilities li { margin: 6px 0; padding: 6px 12px; background: var(--rule); border: 1px solid var(--rule); position: relative; }
-    .capabilities li::before {
-      content: '●';
-      position: absolute;
-      left: 12px;
-      color: var(--accent);
-      font-size: 8pt;
-    }
-
-    /* ── Limitations ── */
-    .limitations { margin: 32px 0; }
-    .limitations h2 { margin: 0 0 12px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
-    .limitations ul { list-style: none; padding: 0; margin: 0; }
-    .limitations li { margin: 6px 0; padding: 6px 12px; background: var(--surface); border: 1px solid var(--rule); }
-
-    /* ── Attribution ── */
-    .attribution { margin: 32px 0; padding-top: 32px; border-top: 1px solid var(--rule); }
-    .attribution h2 { margin: 0 0 8px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
-    .attribution p { margin: 0; color: var(--muted); font-size: 9pt; }
-
-    /* ── Footer / Dual Use Warning ── */
-    .footer { position: fixed; left: 0; right: 0; bottom: 0; padding: 16px 44px; background: var(--surface); border-top: 1px solid var(--rule); color: var(--muted); font-size: 8pt; }
-    .footer a { color: var(--accent); text-decoration: none; }
-    .footer a:hover { text-decoration: underline; }
-
-    /* ── 8bit / Neobrutalist enhancements ── */
+    /* ── 8bit / Neobrutalist base ── */
     .neon-text { text-shadow: 2px 2px 0 var(--muted); }
     .rule-border { border: 2px solid var(--rule); }
     .accent-border { border: 3px solid var(--accent); }
 
+    /* ── Type scales ── */
+    .type-xs { font-size: 8pt; }
+    .type-sm { font-size: 9pt; }
+    .type-base { font-size: 11pt; }
+    .type-lg { font-size: 13pt; }
+    .type-h2 { font-size: 16pt; }
+
+    /* ── Structure: numbered sections with accent in margin ── */
+    .section { padding: 32px 0; border-bottom: 2px solid var(--rule); }
+    .section:last-of-type { border-bottom: 0; }
+    .section .num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10pt;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.1em;
+      display: block;
+      margin-bottom: 8px;
+    }
+    .section .head {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      margin-bottom: 16px;
+    }
+    .section .prose { color: var(--muted); margin-bottom: 16px; }
+
+    /* ── Hero / Cover ── */
+    .cover { border-bottom: 2px solid var(--rule); padding-bottom: 24px; margin-bottom: 32px; }
+    .cover .brand { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .cover .brand-mark {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 24px; height: 24px;
+      background: var(--accent); color: var(--ink);
+      font-weight: 700; font-size: 9pt;
+    }
+    .cover .brand-name { font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; font-size: 9pt; }
+    .cover h1 { margin: 0 0 6px; font-size: 18pt; letter-spacing: -0.01em; }
+    .cover-sub { margin: 0 0 12px; color: var(--muted); font-size: 9pt; }
+
+    /* ── Problem ── */
+    .problem h2 { margin: 0 0 8px; font-size: 14pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+    .problem p { margin: 0; color: var(--muted); }
+
+    /* ── Architecture ── */
+    .architecture .arch-list { list-style: none; padding: 0; margin: 0; }
+    .architecture .arch-list li { margin: 6px 0; padding: 6px 12px; background: var(--rule); border: 1px solid var(--rule); }
+    .architecture .arch-list .label { font-weight: 700; color: var(--accent); }
+
+    /* ── How Assessment Runs ── */
+    .lifecycle .lifecycle-ol { list-style: decimal; padding-left: 24px; margin: 0; }
+    .lifecycle .lifecycle-ol li { margin: 4px 0; }
+
+    /* ── Findings Table ── */
+    .findings-table table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 10pt; }
+    .findings-table th, .findings-table td { padding: 6px 8px; border: 1px solid var(--rule); }
+    .findings-table th { background: var(--accent); color: var(--ink); font-weight: 700; }
+    .findings-table .result-pass { color: var(--pass); font-weight: 700; }
+    .findings-table .result-fail { color: var(--fail); font-weight: 700; }
+
+    /* ── MITRE Coverage ── */
+    .mitre-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-top: 12px; }
+    .mitre-card { padding: 8px; background: var(--surface); border: 1px solid var(--rule); }
+    .mitre-card.pass { border-left: 3px solid var(--pass); }
+    .mitre-card.fail { border-left: 3px solid var(--fail); }
+    .mitre-card .name { font-weight: 700; font-size: 9pt; }
+    .mitre-card .tactic { font-size: 7.5pt; text-transform: uppercase; color: var(--muted); }
+
+    /* ── Agent Capabilities ── */
+    .capabilities ul { list-style: none; padding: 0; margin: 0; }
+    .capabilities li { margin: 4px 0; padding: 4px 8px; background: var(--rule); border: 1px solid var(--rule); }
+
+    /* ── Limitations ── */
+    .limitations ul { list-style: none; padding: 0; margin: 0; }
+    .limitations li { margin: 4px 0; padding: 4px 8px; background: var(--surface); border: 1px solid var(--rule); }
+
+    /* ── Attribution ── */
+    .attribution h2 { margin: 0 0 6px; font-size: 14pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+    .attribution p { margin: 0; color: var(--muted); font-size: 9pt; }
+
+    /* ── Footer / Dual Use ── */
+    .footer { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 44px; background: var(--surface); border-top: 2px solid var(--rule); color: var(--muted); font-size: 7.5pt; }
+
+    /* ── 8bit bullet ── */
+    .bullet { color: var(--accent); font-size: 10pt; line-height: 1; }
+    .bullet-main { font-size: 12pt; }
+
     @media (max-width: 768px) {
       body { padding: 24px; }
-      .cover-sub { font-size: 9pt; }
+      .cover-sub { font-size: 8pt; }
       .attribution p { font-size: 8pt; }
-      .results th, .results td { padding: 6px; font-size: 9pt; }
+      .findings-table th, .findings-table td { padding: 4px; font-size: 9pt; }
     }
   </style>
 </head>
 <body>
 
-  <!-- Hero / Cover -->
+  <!-- /‑ hero ―─────────────────────────────────────────────────────────── -->
   <header class="cover rule-border">
     <div class="brand">
       <span class="brand-mark" aria-hidden="true">AI</span>
       <span class="brand-name neon-text">AgentIde</span>
     </div>
-    <h1>Measuring What Endpoint Security Actually Stops</h1>
-    <p class="cover-sub">EDR/XDR Assessment & Reporting Framework · Security Instrumentation</p>
+    <h1>Assessment Documentation</h1>
+    <p class="cover-sub">EDR/XDR Module‑Driven Assessment — Proof of Concept</p>
   </header>
 
-  <!-- The problem being solved -->
-  <section class="problem rule-border">
-    <h2>⦁ The Problem</h2>
-    <p>Most endpoint security products claim to "detect and resist" adversary techniques, but operators have no independent way to verify what actually stops at the endpoint. AgentIde fills this gap with a module-driven assessment that maps every result to MITRE ATT&CK, producing auditable severity scores, findings, and reports — all without model generation.</p>
+  <!-- /‑ 01 problem ―──────────────────────────────────────────────────── -->
+  <section class="section">
+    <span class="num">01</span>
+    <div class="head">The Problem</div>
+    <p>Most endpoint security products claim to "detect and resist" adversary techniques, but operators have no independent way to verify what actually stops at the endpoint. AgentIde fills this gap with a module‑driven assessment that maps every result to MITRE ATT&CK, producing auditable severity scores, findings, and reports — all without model generation.</p>
+    <p class="prose">A detection is not the same as a prevention. Two products can both show "blocked" for the same technique while behaving completely differently at the edges — one ignores the credential‑theft path entirely, the other survives it.</p>
   </section>
 
-  <!-- Architecture -->
-  <section class="architecture rule-border">
-    <h2>⦁ Architecture</h2>
+  <!-- /‑ 02 architecture ―───────────────────────────────────────────────── -->
+  <section class="section">
+    <span class="num">02</span>
+    <div class="head">Architecture</div>
     <ul class="arch-list">
-      <li><span class="label">Agent</span> — Windows service, Go runtime, kernel‑mode resistant hooks</li>
-      <li><span class="label">Dashboard</span> — React 19 + TanStack Start SSR in a Cloudflare Worker</li>
-      <li><span class="label">Design</span> — Neobrutalist minimalism, 8‑bit aesthetic, deliberate restraint</li>
+      <li><span class="label">Agent</span> — Windows service, Go runtime, kernel‑mode resistant hooks. Discovers installed security vendors, executes assessment modules, streams every result back over a WebSocket.</li>
+      <li><span class="label">Dashboard</span> — React 19 + TanStack Start SSR in a Cloudflare Worker. Aggregates results across the estate, scores findings against ATT&CK techniques, and generates narrative assessment reports.</li>
+      <li><span class="label">Design</span> — The assessment standard itself as data — which techniques run, how they are weighted, how a pass is defined. Separating this from the code means the standard is reviewable on its own.</li>
     </ul>
+    <p class="prose">Every file a module creates is reported back with its full path. That is deliberate — "we detected it" and "we know exactly what it touched" are different guarantees, and only the second is auditable after the fact.</p>
   </section>
 
-  <!-- Assessment Results -->
-  <section class="results rule-border">
-    <h2>⦁ Assessment Results</h2>
-    <table>
+  <!-- /‑ 03 how an assessment runs ―─────────────────────────────────────── -->
+  <section class="section">
+    <span class="num">03</span>
+    <div class="head">How an Assessment Runs</div>
+    <ol class="lifecycle-ol">
+      <li><b>Deploy the agent</b> — installed as a SYSTEM‑level service with a bootstrap token; the dashboard issues a per‑host token on first contact so a shared secret alone cannot impersonate an existing machine.</li>
+      <li><b>Choose a profile</b> — <code>rapid</code>, <code>apt</code> or <code>baseline</code>, each running a different subset of the standard.</li>
+      <li><b>Execute modules</b> — technique checks covering malware, credential access, persistence, network behaviour, identity and anti‑tamper resilience.</li>
+      <li><b>Score and correlate</b> — results are linked by session and mapped to ATT&CK technique IDs, then aggregated across the estate into a comparable posture.</li>
+      <li><b>Report</b> — pass/fail counts, an overall score, and a written assessment covering what was caught and what was not.</li>
+    </ol>
+  </section>
+
+  <!-- /‑ 04 findings ―──────────────────────────────────────────────────── -->
+  <section class="section">
+    <span class="num">04</span>
+    <div class="head">Findings</div>
+    <p>Assessment run on <b>DESKTOP‑L07M1SS</b> (Microsoft Defender), exported 2026‑10‑05. Eight modules were tested against the endpoint using a blackbox profile.</p>
+
+    <table class="findings-table">
       <thead>
-        <tr>
-          <th>Module</th>
-          <th>Result</th>
-          <th>Duration</th>
-          <th>MITRE</th>
-          <th>Test Type</th>
-        </tr>
+        <tr><th>Module</th><th>Result</th><th>Duration</th><th>MITRE</th><th>Test Type</th></tr>
       </thead>
       <tbody>
-        <tr>
-          <td>performance</td>
-          <td><span class="result-pill pass">PASS</span> / <span class="result-pill passive">TIMEOUT</span></td>
-          <td>35.0s</td>
-          <td>Unknown</td>
-          <td>blackbox</td>
-        </tr>
-        <tr>
-          <td>malware</td>
-          <td><span class="result-pill fail">FAIL</span></td>
-          <td>15.3s</td>
-          <td>T1059 (Execution)</td>
-          <td>blackbox</td>
-        </tr>
-        <tr>
-          <td>lolbin</td>
-          <td><span class="result-pill pass">PASS</span></td>
-          <td>6.9s</td>
-          <td>T1059.001</td>
-          <td>blackbox</td>
-        </tr>
-        <tr>
-          <td>network</td>
-          <td><span class="result-pill pass">PASS</span></td>
-          <td>29.8s</td>
-          <td>T1071.001</td>
-          <td>blackbox</td>
-        </tr>
-        <tr>
-          <td>identity</td>
-          <td><span class="result-pill pass">PASS</span></td>
-          <td>269ms</td>
-          <td>T1110.003</td>
-          <td>blackbox</td>
-        </tr>
-        <tr>
-          <td>antitamper</td>
-          <td><span class="result-pill pass">PASS</span></td>
-          <td>292ms</td>
-          <td>T1562.001</td>
-          <td>blackbox</td>
-        </tr>
-        <tr>
-          <td>falsepositive</td>
-          <td><span class="result-pill pass">PASS</span></td>
-          <td>6.8s</td>
-          <td>T1562</td>
-          <td>blackbox</td>
-        </tr>
-        <tr>
-          <td>reboot</td>
-          <td><span class="result-pill fail">FAIL</span></td>
-          <td>0ms</td>
-          <td>T1547.001</td>
-          <td>blackbox</td>
-        </tr>
+        <tr><td>performance</td><td class="result-pass">PASS</span> / <span class="result-fail">TIMEOUT</span></td><td>35.0s</td><td>Unknown</td><td>blackbox</td></tr>
+        <tr><td>malware</td><td class="result-fail">FAIL</span></td><td>15.3s</td><td>T1059 (Execution)</td><td>blackbox</td></tr>
+        <tr><td>lolbin</td><td class="result-pass">PASS</span></td><td>6.9s</td><td>T1059.001</td><td>blackbox</td></tr>
+        <tr><td>network</td><td class="result-pass">PASS</span></td><td>29.8s</td><td>T1071.001</td><td>blackbox</td></tr>
+        <tr><td>identity</td><td class="result-pass">PASS</span></td><td>269ms</td><td>T1110.003</td><td>blackbox</td></tr>
+        <tr><td>antitamper</td><td class="result-pass">PASS</span></td><td>292ms</td><td>T1562.001</td><td>blackbox</td></tr>
+        <tr><td>falsepositive</td><td class="result-pass">PASS</span></td><td>6.8s</td><td>T1562</td><td>blackbox</td></tr>
+        <tr><td>reboot</td><td class="result-fail">FAIL</span></td><td>0ms</td><td>T1547.001</td><td>blackbox</td></tr>
       </tbody>
     </table>
-    <p style="margin-top: 16px; color: var(--muted); font-size: 9pt;">
-      Score: 5 passed / 8 modules (62.5%) · 3 failures · 1 kill/recovery event
-    </p>
+
+    <p class="prose"><strong>Score:</strong> 5 passed / 8 modules (62.5%) · 3 failures · 1 kill/recovery event (agent killed and auto‑recovered after 45m32s)</p>
   </section>
 
-  <!-- MITRE Coverage -->
-  <section class="mitre rule-border">
-    <h2>⦁ MITRE ATT&CK Coverage</h2>
+  <!-- /‑ 05 mitre coverage ―─────────────────────────────────────────────── -->
+  <section class="section">
+    <span class="num">05</span>
+    <div class="head">MITRE ATT&CK Coverage</div>
     <div class="mitre-grid">
-      <div class="mitre-card pass">
-        <div class="name">Execution (T1059)</div>
-        <div class="tactic">✅ Blocked</div>
-      </div>
-      <div class="mitre-card pass">
-        <div class="name">Command and Scripting Interpreter (T1059.001)</div>
-        <div class="tactic">✅ Blocked</div>
-      </div>
-      <div class="mitre-card pass">
-        <div class="name">Application Layer Protocol (T1071.001)</div>
-        <div class="tactic">✅ Blocked</div>
-      </div>
-      <div class="mitre-card pass">
-        <div class="name">Password Spraying (T1110.003)</div>
-        <div class="tactic">✅ Blocked</div>
-      </div>
-      <div class="mitre-card fail">
-        <div class="name">Execution via Registry Run Keys (T1547.001)</div>
-        <div class="tactic">❌ Failed</div>
-      </div>
-      <div class="mitre-card fail">
-        <div class="name">EICAR File On-Disk (T1059)</div>
-        <div class="tactic">❌ Failed</div>
-      </div>
+      <div class="mitre-card pass"><div class="name">Execution (T1059)</div><div class="tactic">✅ Blocked</div></div>
+      <div class="mitre-card pass"><div class="name">Command & Scripting Interpreter (T1059.001)</div><div class="tactic">✅ Blocked</div></div>
+      <div class="mitre-card pass"><div class="name">Application Layer Protocol (T1071.001)</div><div class="tactic">✅ Blocked</div></div>
+      <div class="mitre-card pass"><div class="name">Password Spraying (T1110.003)</div><div class="tactic">✅ Blocked</div></div>
+      <div class="mitre-card fail"><div class="name">Registry Run Keys (T1547.001)</div><div class="tactic">❌ Failed</div></div>
+      <div class="mitre-card fail"><div class="name">EICAR File On‑Disk (T1059)</div><div class="tactic">❌ Failed</div></div>
     </div>
+    <p class="prose">Techniques that the endpoint resisted are shown in <span style="color:var(--pass)">green</span>; gaps in coverage are shown in <span style="color:var(--fail)">red</span>. Every status pairs a colour with a text label — colour alone never carries meaning.</p>
   </section>
 
-  <!-- Deployment Integrity -->
-  <section class="integrity rule-border">
-    <h2>✎ Deployment Integrity</h2>
+  <!-- /‑ 06 agent capabilities ―─────────────────────────────────────────── -->
+  <section class="section">
+    <span class="num">06</span>
+    <div class="head">What the Agent Can Do</div>
     <ul>
-      <li>Agent kill detected: externally terminated and auto-recovered after 45m32s</li>
-      <li>Total kills: 3 · Recovery #: 5</li>
-      <li>Agent resilience: watchdog restarts on crash</li>
-    </ul>
-  </section>
-
-  <!-- Agent Capabilities -->
-  <section class="capabilities rule-border">
-    <h2>⦁ What the Agent Can Do</h2>
-    <ul>
-      <li>Execute MITRE ATT&CK-mapped assessment modules against the endpoint</li>
-      <li>Report results with result, severity, and MITRE mapping per module</li>
-      <li>Export structured findings as HTML, Markdown, JSON, or Docx</li>
-      <li>Deploy as a SYSTEM‑level service that resists removal</li>
-      <li>Include AMSI/ETW disabling for technique fidelity</li>
-      <li>Built‑in watchdog for resilience and restart on crash</li>
+      <li>Execute MITRE ATT&CK‑mapped assessment modules against the endpoint and report results with result, severity, and MITRE mapping per module</li>
+      <li>Export structured findings as HTML, Markdown, JSON, or Docx — using the same deterministic renderer the screen shows, so two exports of one run are byte‑identical</li>
+      <li>Deploy as a SYSTEM‑level service that resists removal — the service descriptor denies stop, reconfigure and delete to SYSTEM, so a SYSTEM‑level product cannot quietly disable it</li>
+      <li>Include AMSI/ETW disabling modules for technique fidelity — ensuring the assessment measures what the technique actually does, not a sanitised version</li>
+      <li>Built‑in watchdog for resilience — restarts the service on crash, including after a kernel‑level kill, with a short escalating recovery schedule</li>
+      <li>Guardian service — a second service restarts the first, recreates its registration if deleted, restores its start type, and restores the binary from a backup copy if it is removed</li>
       <li>Dual‑use: only use on systems you own or have written authorisation to test</li>
     </ul>
   </section>
 
-  <!-- Limitations -->
-  <section class="limitations rule-border">
-    <h2>⦁ Limitations & Out of Scope</h2>
+  <!-- /‑ 07 limitations ―────────────────────────────────────────────────── -->
+  <section class="section">
+    <span class="num">07</span>
+    <div class="head">Limitations & Out of Scope</div>
     <ul>
-      <li>No cloud‑scale telemetry — assessments are per‑endpoint only</li>
-      <li>No real‑time C2 or lateral‑movement simulation</li>
-      <li>Scoring is deterministic per‑module, not model‑generated</li>
-      <li>Exported reports contain no customer data, tokens, or internal IPs</li>
-      <li>Reboot and certain privileged techniques may be restricted by policy</li>
+      <li>It measures <em>detection on a single endpoint under a known profile</em> — not coverage across a whole estate, and not adversarial evasion by a sophisticated actor</li>
+      <li>A passing run means the technique executed and was caught <em>that time</em>. It is evidence, not proof of a guarantee</li>
+      <li>Self‑protection raises the bar for a user‑mode actor only. A kernel‑mode product can still terminate the agent; recovery layers mitigate, they do not prevent</li>
+      <li>Scoring weights are opinionated. They are a defensible default, not a standard, and are meant to be edited in the <code>design/</code> layer</li>
+      <li>This is a POC framework. It is not hardened for hostile‑environment deployment and has not been through an external security review</li>
     </ul>
   </section>
 
-  <!-- Attribution -->
-  <section class="attribution rule-border">
-    <h2>⦁ Attribution</h2>
-    <p>Designed & built by <a href="https://github.com/OdigieDavidIdemudia">David Idemudia Odige</a>. AgentIde is an open‑source framework for evaluating endpoint security resilience.</p>
-    <p>Assessment data: SOC assessment run on DESKTOP-L07M1SS, exported 2026‑10‑05. 8 modules tested, 5 resisted, 3 failed.</p>
+  <!-- /‑ 08 attribution ―────────────────────────────────────────────────── -->
+  <section class="section">
+    <span class="num">08</span>
+    <div class="head">Attribution</div>
+    <p><strong>Author:</strong> David Idemudia Odige — <a href="https://github.com/OdigieDavidIdemudia">@OdigieDavidIdemudia</a></p>
+    <p>Dual‑use security research. Authorised testing only.</p>
+    <p><strong>Assessment data:</strong> SOC assessment run on DESKTOP‑L07M1SS, exported 2026‑10‑05. 8 modules tested, 5 resisted, 3 failed. Full findings and MITRE mappings are published above.</p>
   </section>
 
-  <!-- Fixed footer / Dual Use Warning -->
+  <!-- /‑ footer / dual-use warning ―─────────────────────────────────────── -->
   <footer class="footer">
     <strong>Dual‑use warning:</strong> AgentIDE stops security services, kills vendor processes, and installs a hardened SYSTEM service that resists removal. Use only on systems you own or have written authorisation to test. Unauthorised use is illegal. <strong>Assessment methodology and scoring model are published — operational detail is withheld.</strong>
   </footer>
