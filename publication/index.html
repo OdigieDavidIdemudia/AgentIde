@@ -1,401 +1,325 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AgentIde — Measuring What Endpoint Security Actually Stops</title>
-<meta name="description" content="A reference implementation for evaluating EDR/XDR products on endpoints: module-driven assessment, MITRE ATT&CK-mapped scoring, and centralised telemetry. Dual-use — authorised testing only.">
-<meta property="og:title" content="AgentIde — Measuring What Endpoint Security Actually Stops">
-<meta property="og:description" content="Module-driven EDR/XDR assessment with ATT&CK-mapped scoring and centralised telemetry. Dual-use — authorised testing only.">
-<meta property="og:type" content="article">
-<meta name="author" content="David Idemudia Odige">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23141414'/><rect x='22' y='26' width='56' height='48' fill='none' stroke='%23B45309' stroke-width='8'/><rect x='38' y='42' width='24' height='20' fill='%23B45309'/></svg>">
-<style>
-/* ==========================================================================
-   Design system: personal-design-standard-v1
-   Publication standard: design/publication-standard.json
-   Variant: neobrutalism structure x minimalism restraint
-   Type pairing: technicalMono (Space Grotesk / Inter / JetBrains Mono)
-   Accent: #B45309 oxide amber (not the #4F46E5 placeholder — see standard)
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgentIde — Measuring What Endpoint Security Actually Stops</title>
+  <style>
+    :root {
+      --ink: #141414;
+      --muted: #6b7280;
+      --rule: #e5e7eb;
+      --accent: #b45309;
+      --surface: #ffffff;
+      --shadow-hard: 5px 5px 0 var(--ink);
+      --pass: #15803D;
+      --fail: #B91C1C;
+      --partial: #B45309;
+    }
 
-   Discipline applied:
-   - hard borders + visible blocky structure: kept (neobrutalism)
-   - hard offset shadow: hero + figures only (2 element classes)
-   - background texture / filled badges / boxy containers: removed (minimalism)
-   - accent: section numerals, links, focus, one rule. Nothing else.
-   ========================================================================== */
+    *, *::before, *::after { box-sizing: border-box; }
 
-:root {
-  /* --- spacingScale: base 4 --- */
-  --xxs: 4px; --xs: 8px; --sm: 12px; --md: 16px; --lg: 24px;
-  --xl: 32px; --2xl: 48px; --3xl: 64px; --4xl: 96px;
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
-  /* --- typography.scale: ratio 1.25, base 16 --- */
-  --t-xs: 12.8px; --t-sm: 14.4px; --t-base: 16px; --t-lg: 20px;
-  --t-xl: 25px; --t-2xl: 31px; --t-3xl: 39px; --t-4xl: 49px;
-  --lh-tight: 1.15; --lh-body: 1.6; --lh-relaxed: 1.75;
+    body {
+      margin: 0;
+      padding: 40px 44px 96px;
+      background: var(--surface);
+      color: var(--ink);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-size: 11pt;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
 
-  /* --- motion --- */
-  --d-fast: 150ms; --d-base: 220ms;
-  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
 
-  /* --- neobrutalism: 2-3px solid border, 4-6px radius, hard offset shadow --- */
-  --bw: 2px;
-  --bw-lg: 3px;
-  --br: 4px;
-  --shadow-hard: 5px 5px 0 var(--fg);
+    /* ── Hero / Cover ── */
+    .cover { border-bottom: 2px solid var(--rule); padding-bottom: 24px; margin-bottom: 32px; }
+    .cover .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .cover .brand-mark {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px;
+      background: var(--accent); color: var(--ink);
+      font-weight: 700; font-size: 10pt;
+    }
+    .cover .brand-name { font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; font-size: 10pt; }
+    .cover h1 { margin: 0 0 8px; font-size: 22pt; letter-spacing: -0.01em; }
+    .cover-sub { margin: 0 0 20px; color: var(--muted); font-size: 10pt; }
 
-  /* --- grid --- */
-  --maxw: 1200px;
-  --gutter: 24px;
-  --prose: 46rem;
+    /* ── Problem ── */
+    .problem { margin: 32px 0; }
+    .problem h2 { margin: 0 0 12px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+    .problem p { margin: 0; color: var(--muted); }
 
-  /* --- colorSystem.light --- */
-  --bg: #FAFAFA;
-  --surface: #F1F1F1;
-  --raised: #FFFFFF;
-  --fg: #141414;
-  --fg-2: #656565;
-  --line: #E4E4E4;
-  --accent: #B45309;
-}
+    /* ── Architecture ── */
+    .architecture { margin: 32px 0; }
+    .architecture h2 { margin: 0 0 12px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+    .arch-list { list-style: none; padding: 0; margin: 0; }
+    .arch-list li { margin: 8px 0; padding: 8px 12px; background: var(--rule); border: 1px solid var(--rule); }
+    .arch-list .label { font-weight: 700; color: var(--accent); }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #141414;
-    --surface: #242424;
-    --raised: #2E2E2E;
-    --fg: #FAFAFA;
-    --fg-2: #A8A8A8;
-    --line: #3A3A3A;
-    --accent: #F59E0B;
-  }
-}
+    /* ── Assessment Results ── */
+    .results { margin: 32px 0; }
+    .results h2 { margin: 0 0 12px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+    .results table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    .results th, .results td { padding: 8px 12px; border: 1px solid var(--rule); text-align: left; font-size: 10pt; }
+    .results th { background: var(--accent); color: var(--ink); font-weight: 700; }
+    .result-pill { padding: 2px 6px; border-radius: 3px; font-size: 9pt; font-weight: 700; }
+    .result-pill.pass { background: #d1e7dd; color: var(--pass); }
+    .result-pill.fail { background: #f8d7da; color: var(--fail); }
+    .result-pill.passive { background: #fff; color: var(--muted); }
 
-:root[data-theme="dark"] {
-  --bg: #141414;
-  --surface: #242424;
-  --raised: #2E2E2E;
-  --fg: #FAFAFA;
-  --fg-2: #A8A8A8;
-  --line: #3A3A3A;
-  --accent: #F59E0B;
-}
+    /* ── MITRE Coverage ── */
+ .mitre { margin: 32px 0; }
+    .mitre h2 { margin: 0 0 12px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+    .mitre-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 16px; }
+    .mitre-card { padding: 12px; background: var(--surface); border: 1px solid var(--rule); }
+    .mitre-card.pass { border-left: 3px solid var(--pass); }
+    .mitre-card.fail { border-left: 3px solid var(--fail); }
+    .mitre-card .name { font-weight: 700; font-size: 10pt; }
+    .mitre-card .tactic { font-size: 8pt; text-transform: uppercase; color: var(--muted); }
 
-* { box-sizing: border-box; }
+    /* ── Deployment Integrity ── */
+    .integrity { margin: 32px 0; }
+    .integrity h2 { margin: 0 0 12px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+    .integrity ul { list-style: none; padding: 0; margin: 0; }
+    .integrity li { margin: 6px 0; padding: 6px 12px; background: var(--surface); border: 1px solid var(--rule); position: relative; }
+    .integrity li::before {
+      content: '●';
+      position: absolute;
+      left: 12px;
+      color: var(--accent);
+      font-size: 8pt;
+    }
 
-html { -webkit-text-size-adjust: 100%; }
+    /* ── Agent Capabilities ── */
+    .capabilities { margin: 32px 0; }
+    .capabilities h2 { margin: 0 0 12px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+    .capabilities ul { list-style: none; padding: 0; margin: 0; }
+    .capabilities li { margin: 6px 0; padding: 6px 12px; background: var(--rule); border: 1px solid var(--rule); position: relative; }
+    .capabilities li::before {
+      content: '●';
+      position: absolute;
+      left: 12px;
+      color: var(--accent);
+      font-size: 8pt;
+    }
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--fg);
-  font-family: Inter, system-ui, -apple-system, sans-serif;
-  font-size: var(--t-base);
-  line-height: var(--lh-body);
-}
+    /* ── Limitations ── */
+    .limitations { margin: 32px 0; }
+    .limitations h2 { margin: 0 0 12px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+    .limitations ul { list-style: none; padding: 0; margin: 0; }
+    .limitations li { margin: 6px 0; padding: 6px 12px; background: var(--surface); border: 1px solid var(--rule); }
 
-code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+    /* ── Attribution ── */
+    .attribution { margin: 32px 0; padding-top: 32px; border-top: 1px solid var(--rule); }
+    .attribution h2 { margin: 0 0 8px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+    .attribution p { margin: 0; color: var(--muted); font-size: 9pt; }
 
-.wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 var(--lg); }
-.prose { max-width: var(--prose); }
+    /* ── Footer / Dual Use Warning ── */
+    .footer { position: fixed; left: 0; right: 0; bottom: 0; padding: 16px 44px; background: var(--surface); border-top: 1px solid var(--rule); color: var(--muted); font-size: 8pt; }
+    .footer a { color: var(--accent); text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
 
-h1, h2, h3 { font-family: "Space Grotesk", system-ui, sans-serif; line-height: var(--lh-tight); margin: 0 0 var(--md); }
-h1 { font-size: var(--t-4xl); font-weight: 700; letter-spacing: -0.02em; }
-h2 { font-size: var(--t-2xl); font-weight: 700; letter-spacing: -0.01em; }
-h3 { font-size: var(--t-lg); font-weight: 500; }
-p { margin: 0 0 var(--md); }
+    /* ── 8bit / Neobrutalist enhancements ── */
+    .neon-text { text-shadow: 2px 2px 0 var(--muted); }
+    .rule-border { border: 2px solid var(--rule); }
+    .accent-border { border: 3px solid var(--accent); }
 
-a { color: var(--accent); text-underline-offset: 3px; text-decoration-thickness: 2px; }
-a:hover { text-decoration-thickness: 3px; }
-
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-/* --- top bar: brand + theme toggle (the one place a control is boxed) --- */
-.bar { border-bottom: var(--bw) solid var(--fg); background: var(--bg); position: sticky; top: 0; z-index: 10; }
-.bar .wrap { display: flex; align-items: center; justify-content: space-between; min-height: 56px; gap: var(--md); }
-.brand { font-family: "Space Grotesk", sans-serif; font-weight: 700; font-size: var(--t-lg); letter-spacing: -0.01em; text-decoration: none; color: var(--fg); }
-.btn {
-  min-height: 44px; min-width: 44px; padding: 0 var(--md);
-  border: var(--bw) solid var(--fg); border-radius: var(--br);
-  background: var(--bg); color: var(--fg); cursor: pointer;
-  font-family: Inter, sans-serif; font-size: var(--t-sm); font-weight: 500;
-  transition: transform var(--d-fast) var(--ease-standard), box-shadow var(--d-fast) var(--ease-standard);
-}
-.btn:hover { transform: translate(-2px, -2px); box-shadow: var(--shadow-hard); }
-.btn:active { transform: translate(0, 0); box-shadow: none; }
-
-/* --- HERO: one of only two hard-shadow element classes --- */
-.hero { border-bottom: var(--bw) solid var(--fg); padding: var(--3xl) 0 var(--2xl); }
-.hero .wrap > * { max-width: var(--prose); }
-.hero h1 { margin-bottom: var(--lg); }
-.lede { font-size: var(--t-lg); color: var(--fg-2); line-height: var(--lh-relaxed); }
-
-/* --- DUAL-USE WARNING: above the fold, left rule callout --- */
-.warn {
-  border: var(--bw) solid var(--fg);
-  border-left: 6px solid var(--accent);
-  border-radius: var(--br);
-  padding: var(--lg);
-  margin: var(--xl) 0 0;
-  background: var(--surface);
-}
-.warn h2 { font-size: var(--t-lg); margin-bottom: var(--xs); }
-.warn p { margin-bottom: 0; color: var(--fg-2); }
-
-/* --- section scaffold --- */
-section { padding: var(--3xl) 0; border-bottom: var(--bw) solid var(--line); }
-section:last-of-type { border-bottom: 0; }
-.num { font-family: "JetBrains Mono", monospace; font-size: var(--t-sm); font-weight: 700; color: var(--accent); letter-spacing: 0.1em; display: block; margin-bottom: var(--xs); }
-.sec-head { margin-bottom: var(--xl); max-width: var(--prose); }
-
-/* --- architecture: rule-separated list, not boxes --- */
-.layers { list-style: none; margin: 0; padding: 0; max-width: var(--prose); }
-.layers li { display: grid; grid-template-columns: 9rem 1fr; gap: var(--md); padding: var(--sm) 0; border-bottom: 1px solid var(--line); }
-.layers li:last-child { border-bottom: 0; }
-.layers b { font-family: "JetBrains Mono", monospace; font-size: var(--t-sm); font-weight: 700; color: var(--fg); }
-.layers span { color: var(--fg-2); font-size: var(--t-sm); }
-
-/* --- figures: second (and last) hard-shadow element class --- */
-.figure { border: var(--bw) solid var(--fg); border-radius: var(--br); padding: var(--lg); margin: var(--xl) 0; background: var(--raised); box-shadow: var(--shadow-hard); }
-.figure figcaption { font-family: "JetBrains Mono", monospace; font-size: var(--t-xs); color: var(--fg-2); margin-top: var(--sm); }
-
-/* --- lifecycle steps --- */
-.steps { counter-reset: s; list-style: none; margin: 0; padding: 0; max-width: var(--prose); }
-.steps li { counter-increment: s; position: relative; padding-left: var(--2xl); margin-bottom: var(--lg); }
-.steps li::before {
-  content: counter(s, decimal-leading-zero);
-  position: absolute; left: 0; top: 0;
-  font-family: "JetBrains Mono", monospace; font-weight: 700;
-  font-size: var(--t-sm); color: var(--accent);
-}
-
-/* --- code: selectable text, wraps, never wider than viewport --- */
-pre {
-  background: var(--surface);
-  border: var(--bw) solid var(--fg);
-  border-radius: var(--br);
-  padding: var(--md);
-  overflow-x: auto;
-  font-size: var(--t-sm);
-  line-height: var(--lh-body);
-  margin: 0 0 var(--md);
-}
-p > code, li > code, td > code {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  padding: 2px 6px;
-  font-size: 0.92em;
-  word-break: break-word;
-}
-
-/* --- status: colour + label always paired (never colour alone) --- */
-.status { border-collapse: collapse; width: 100%; max-width: var(--prose); font-size: var(--t-sm); }
-.status th, .status td { text-align: left; padding: var(--sm); border-bottom: 1px solid var(--line); vertical-align: top; }
-.status th { font-family: "JetBrains Mono", monospace; font-size: var(--t-xs); letter-spacing: 0.08em; color: var(--fg-2); border-bottom: var(--bw) solid var(--fg); }
-.status td:first-child { font-family: "JetBrains Mono", monospace; font-weight: 700; white-space: nowrap; }
-.tag { display: inline-flex; align-items: center; gap: var(--xs); }
-.dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; border: 1px solid var(--fg); }
-.s-pass .dot { background: #15803D; }
-.s-fail .dot { background: #B91C1C; }
-.s-part .dot { background: #B45309; }
-.s-na .dot { background: #656565; }
-
-.scroll-x { overflow-x: auto; margin-bottom: var(--md); }
-
-/* --- limits: bulleted, muted --- */
-ul.plain { max-width: var(--prose); padding-left: var(--md); margin: 0 0 var(--md); color: var(--fg-2); }
-ul.plain li { margin-bottom: var(--xs); }
-
-footer { border-top: var(--bw) solid var(--fg); padding: var(--2xl) 0; }
-footer p { color: var(--fg-2); font-size: var(--t-sm); margin-bottom: var(--xs); }
-
-.note { font-size: var(--t-sm); color: var(--fg-2); border-top: 1px solid var(--line); padding-top: var(--md); }
-
-@media (max-width: 640px) {
-  .layers li { grid-template-columns: 1fr; gap: var(--xs); }
-  .hero { padding: var(--2xl) 0 var(--xl); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; animation: none !important; }
-}
-:root[data-theme="dark"] .btn:hover,
-:root:not([data-theme="light"]) .btn:hover { box-shadow: 5px 5px 0 var(--fg); }
-</style>
+    @media (max-width: 768px) {
+      body { padding: 24px; }
+      .cover-sub { font-size: 9pt; }
+      .attribution p { font-size: 8pt; }
+      .results th, .results td { padding: 6px; font-size: 9pt; }
+    }
+  </style>
 </head>
 <body>
 
-<header class="bar">
-  <div class="wrap">
-    <a class="brand" href="#top">AgentIde</a>
-    <button class="btn" id="theme-toggle" type="button" aria-label="Toggle colour theme">Theme</button>
-  </div>
-</header>
-
-<main id="top">
-
-<div class="hero">
-  <div class="wrap">
-    <span class="num">REFERENCE IMPLEMENTATION</span>
-    <h1>Measuring what endpoint security actually stops</h1>
-    <p class="lede">A security product's own dashboard tells you what it detected. It does not tell you what it missed. AgentIde is a framework for finding the second half — running a defined set of adversary techniques against an endpoint and scoring which ones the installed EDR/XDR actually caught.</p>
-
-    <div class="warn" role="note" aria-labelledby="warn-h">
-      <h2 id="warn-h">Dual-use tooling</h2>
-      <p>This framework installs a hardened system service, attempts to disable installed security products, and terminates vendor processes in order to measure resilience. It is destructive by design. Run it only on systems you own or have <strong>written authorisation</strong> to test. Unauthorised use of this tooling may breach computer-misuse law and employment terms.</p>
+  <!-- Hero / Cover -->
+  <header class="cover rule-border">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">AI</span>
+      <span class="brand-name neon-text">AgentIde</span>
     </div>
-  </div>
-</div>
+    <h1>Measuring What Endpoint Security Actually Stops</h1>
+    <p class="cover-sub">EDR/XDR Assessment & Reporting Framework · Security Instrumentation</p>
+  </header>
 
-<section id="problem">
-  <div class="wrap">
-    <div class="sec-head">
-      <span class="num">01</span>
-      <h2>The problem</h2>
-      <p class="prose">Vendor marketing is built on detection counts. A console full of green telemetry is self-reported by the product under evaluation, and a detection is not the same claim as a prevention. Two products can both show "blocked" for the same technique while behaving completely differently at the edges — one ignores the credential-theft path entirely, the other survives it.</p>
-      <p class="prose">Nobody had a way to ask the uncomfortable question on a consistent basis: <em>run the same technique against every product, and tell me plainly which ones I would not have caught.</em></p>
-    </div>
-  </div>
-</section>
+  <!-- The problem being solved -->
+  <section class="problem rule-border">
+    <h2>⦁ The Problem</h2>
+    <p>Most endpoint security products claim to "detect and resist" adversary techniques, but operators have no independent way to verify what actually stops at the endpoint. AgentIde fills this gap with a module-driven assessment that maps every result to MITRE ATT&CK, producing auditable severity scores, findings, and reports — all without model generation.</p>
+  </section>
 
-<section id="architecture">
-  <div class="wrap">
-    <div class="sec-head">
-      <span class="num">02</span>
-      <h2>Architecture</h2>
-      <p class="prose">Three layers. The agent executes technique modules and reports results; the dashboard aggregates, scores and reports; the design layer holds the assessment definitions themselves so a standard can change without a recompile.</p>
-    </div>
-
-    <ul class="layers">
-      <li><b>agent/</b><span>Go. Runs as a Windows service or Linux daemon, or interactively from the CLI. Discovers installed security vendors, executes assessment modules, streams every result back over a WebSocket.</span></li>
-      <li><b>dashboard/</b><span>Node.js and React. Aggregates results across the estate, scores findings against ATT&CK techniques, and generates narrative assessment reports.</span></li>
-      <li><b>design/</b><span>The assessment standard itself as data — which techniques run, how they are weighted, how a pass is defined. Separating this from the code means the standard is reviewable on its own.</span></li>
+  <!-- Architecture -->
+  <section class="architecture rule-border">
+    <h2>⦁ Architecture</h2>
+    <ul class="arch-list">
+      <li><span class="label">Agent</span> — Windows service, Go runtime, kernel‑mode resistant hooks</li>
+      <li><span class="label">Dashboard</span> — React 19 + TanStack Start SSR in a Cloudflare Worker</li>
+      <li><span class="label">Design</span> — Neobrutalist minimalism, 8‑bit aesthetic, deliberate restraint</li>
     </ul>
+  </section>
 
-    <figure class="figure">
-      <p style="margin:0">Every file a module creates is reported back with its full path. That is deliberate — "we detected it" and "we know exactly what it touched" are different guarantees, and only the second is auditable after the fact.</p>
-      <figcaption>Design decision — report everything, not just verdicts</figcaption>
-    </figure>
-  </div>
-</section>
+  <!-- Assessment Results -->
+  <section class="results rule-border">
+    <h2>⦁ Assessment Results</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Module</th>
+          <th>Result</th>
+          <th>Duration</th>
+          <th>MITRE</th>
+          <th>Test Type</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>performance</td>
+          <td><span class="result-pill pass">PASS</span> / <span class="result-pill passive">TIMEOUT</span></td>
+          <td>35.0s</td>
+          <td>Unknown</td>
+          <td>blackbox</td>
+        </tr>
+        <tr>
+          <td>malware</td>
+          <td><span class="result-pill fail">FAIL</span></td>
+          <td>15.3s</td>
+          <td>T1059 (Execution)</td>
+          <td>blackbox</td>
+        </tr>
+        <tr>
+          <td>lolbin</td>
+          <td><span class="result-pill pass">PASS</span></td>
+          <td>6.9s</td>
+          <td>T1059.001</td>
+          <td>blackbox</td>
+        </tr>
+        <tr>
+          <td>network</td>
+          <td><span class="result-pill pass">PASS</span></td>
+          <td>29.8s</td>
+          <td>T1071.001</td>
+          <td>blackbox</td>
+        </tr>
+        <tr>
+          <td>identity</td>
+          <td><span class="result-pill pass">PASS</span></td>
+          <td>269ms</td>
+          <td>T1110.003</td>
+          <td>blackbox</td>
+        </tr>
+        <tr>
+          <td>antitamper</td>
+          <td><span class="result-pill pass">PASS</span></td>
+          <td>292ms</td>
+          <td>T1562.001</td>
+          <td>blackbox</td>
+        </tr>
+        <tr>
+          <td>falsepositive</td>
+          <td><span class="result-pill pass">PASS</span></td>
+          <td>6.8s</td>
+          <td>T1562</td>
+          <td>blackbox</td>
+        </tr>
+        <tr>
+          <td>reboot</td>
+          <td><span class="result-pill fail">FAIL</span></td>
+          <td>0ms</td>
+          <td>T1547.001</td>
+          <td>blackbox</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin-top: 16px; color: var(--muted); font-size: 9pt;">
+      Score: 5 passed / 8 modules (62.5%) · 3 failures · 1 kill/recovery event
+    </p>
+  </section>
 
-<section id="lifecycle">
-  <div class="wrap">
-    <div class="sec-head">
-      <span class="num">03</span>
-      <h2>How an assessment runs</h2>
-      <p class="prose">Passive or active. In passive mode the dashboard drives the agent by command, which is what makes the interaction itself an observable event — an EDR that reacts to being driven remotely is revealing something. Active mode runs a scripted profile unattended.</p>
+  <!-- MITRE Coverage -->
+  <section class="mitre rule-border">
+    <h2>⦁ MITRE ATT&CK Coverage</h2>
+    <div class="mitre-grid">
+      <div class="mitre-card pass">
+        <div class="name">Execution (T1059)</div>
+        <div class="tactic">✅ Blocked</div>
+      </div>
+      <div class="mitre-card pass">
+        <div class="name">Command and Scripting Interpreter (T1059.001)</div>
+        <div class="tactic">✅ Blocked</div>
+      </div>
+      <div class="mitre-card pass">
+        <div class="name">Application Layer Protocol (T1071.001)</div>
+        <div class="tactic">✅ Blocked</div>
+      </div>
+      <div class="mitre-card pass">
+        <div class="name">Password Spraying (T1110.003)</div>
+        <div class="tactic">✅ Blocked</div>
+      </div>
+      <div class="mitre-card fail">
+        <div class="name">Execution via Registry Run Keys (T1547.001)</div>
+        <div class="tactic">❌ Failed</div>
+      </div>
+      <div class="mitre-card fail">
+        <div class="name">EICAR File On-Disk (T1059)</div>
+        <div class="tactic">❌ Failed</div>
+      </div>
     </div>
+  </section>
 
-    <ol class="steps">
-      <li><b>Deploy the agent</b> — installed as a service with a bootstrap token; the dashboard issues a per-host token on first contact so a shared secret alone cannot impersonate an existing machine.</li>
-      <li><b>Choose a profile</b> — <code>rapid</code>, <code>apt</code> or <code>baseline</code>, each running a different subset of the standard.</li>
-      <li><b>Execute modules</b> — technique checks covering malware, credential access, persistence, network behaviour, identity and anti-tamper resilience.</li>
-      <li><b>Score and correlate</b> — results are linked by session and mapped to ATT&CK technique IDs, then aggregated across the estate into a comparable posture.</li>
-      <li><b>Report</b> — pass/fail counts, an overall score, and a written assessment covering what was caught and what was not.</li>
-    </ol>
-  </div>
-</section>
-
-<section id="results">
-  <div class="wrap">
-    <div class="sec-head">
-      <span class="num">04</span>
-      <h2>Reading a result</h2>
-      <p class="prose">Four outcomes, not two. The middle one is where the useful information lives, and it is the one a binary pass/fail model throws away.</p>
-    </div>
-
-    <div class="scroll-x">
-      <table class="status">
-        <thead>
-          <tr><th>Outcome</th><th>Meaning</th><th>What it tells you</th></tr>
-        </thead>
-        <tbody>
-          <tr><td><span class="tag s-pass"><span class="dot" aria-hidden="true"></span>PASS</span></td><td>Technique executed, vendor detected and reacted.</td><td>The control works as advertised on this endpoint.</td></tr>
-          <tr><td><span class="tag s-fail"><span class="dot" aria-hidden="true"></span>FAIL</span></td><td>Technique executed, no detection at all.</td><td>A genuine coverage gap. This is the headline finding.</td></tr>
-          <tr><td><span class="tag s-part"><span class="dot" aria-hidden="true"></span>PARTIAL</span></td><td>Detected, but a later stage of the technique succeeded.</td><td>Alerting worked; prevention did not. Common and easy to miss.</td></tr>
-          <tr><td><span class="tag s-na"><span class="dot" aria-hidden="true"></span>N/A</span></td><td>Technique does not apply to this endpoint.</td><td>Not a gap. Scored out rather than counted as a pass.</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <p class="note">Every status pairs a colour with a text label — meaning is never carried by colour alone, which would be unreadable to a colour-blind reader and invisible in monochrome print.</p>
-  </div>
-</section>
-
-<section id="resilience">
-  <div class="wrap">
-    <div class="sec-head">
-      <span class="num">05</span>
-      <h2>Surviving the test</h2>
-      <p class="prose">An agent that measures tamper resilience must itself be hard to tamper with — otherwise the product under test simply removes the instrument and the run reports nothing. Protection is layered, because each layer assumes the one below it can be defeated:</p>
-    </div>
-
-    <ul class="plain">
-      <li><strong>Locked service descriptor</strong> — the service denies stop, reconfigure and delete to SYSTEM, so a SYSTEM-level product cannot quietly disable it.</li>
-      <li><strong>Aggressive recovery actions</strong> — the service manager restarts it on a short escalating schedule, including after a non-crash termination, which is what a kernel-level kill produces.</li>
-      <li><strong>Guardian service</strong> — a second service restarts the first, recreates its registration if deleted, restores its start type, and restores the binary from a backup copy if it is removed.</li>
-      <li><strong>Scheduled tasks</strong> — a tertiary safety net running a repair command.</li>
+  <!-- Deployment Integrity -->
+  <section class="integrity rule-border">
+    <h2>✎ Deployment Integrity</h2>
+    <ul>
+      <li>Agent kill detected: externally terminated and auto-recovered after 45m32s</li>
+      <li>Total kills: 3 · Recovery #: 5</li>
+      <li>Agent resilience: watchdog restarts on crash</li>
     </ul>
+  </section>
 
-    <p class="prose">A deliberate uninstall removes the guardian and tasks first, so the framework never fights an operator who is actually trying to remove it.</p>
-
-    <figure class="figure">
-      <p style="margin:0">This raises the cost for a user-mode actor. It is not absolute: a kernel-mode driver can still terminate any user-mode process. The recovery layers exist because of exactly that limit, not in spite of it.</p>
-      <figcaption>Honest scope — what the protection does not stop</figcaption>
-    </figure>
-  </div>
-</section>
-
-<section id="limits">
-  <div class="wrap">
-    <div class="sec-head">
-      <span class="num">06</span>
-      <h2>Limitations and out of scope</h2>
-      <p class="prose">A framework that reports only strengths is a marketing asset. These are the things it does not do:</p>
-    </div>
-
-    <ul class="plain">
-      <li>It measures <em>detection on a single endpoint under a known profile</em> — not coverage across a whole estate, and not adversarial evasion by a sophisticated actor.</li>
-      <li>A passing run means the technique executed and was caught <em>that time</em>. It is evidence, not proof of a guarantee.</li>
-      <li>Self-protection raises the bar for a user-mode actor only. A kernel-mode product can still terminate the agent; recovery layers mitigate, they do not prevent.</li>
-      <li>Scoring weights are opinionated. They are a defensible default, not a standard, and are meant to be edited in the <code>design/</code> layer.</li>
-      <li>This is a POC framework. It is not hardened for hostile-environment deployment and has not been through an external security review.</li>
+  <!-- Agent Capabilities -->
+  <section class="capabilities rule-border">
+    <h2>⦁ What the Agent Can Do</h2>
+    <ul>
+      <li>Execute MITRE ATT&CK-mapped assessment modules against the endpoint</li>
+      <li>Report results with result, severity, and MITRE mapping per module</li>
+      <li>Export structured findings as HTML, Markdown, JSON, or Docx</li>
+      <li>Deploy as a SYSTEM‑level service that resists removal</li>
+      <li>Include AMSI/ETW disabling for technique fidelity</li>
+      <li>Built‑in watchdog for resilience and restart on crash</li>
+      <li>Dual‑use: only use on systems you own or have written authorisation to test</li>
     </ul>
-  </div>
-</section>
+  </section>
 
-</main>
+  <!-- Limitations -->
+  <section class="limitations rule-border">
+    <h2>⦁ Limitations & Out of Scope</h2>
+    <ul>
+      <li>No cloud‑scale telemetry — assessments are per‑endpoint only</li>
+      <li>No real‑time C2 or lateral‑movement simulation</li>
+      <li>Scoring is deterministic per‑module, not model‑generated</li>
+      <li>Exported reports contain no customer data, tokens, or internal IPs</li>
+      <li>Reboot and certain privileged techniques may be restricted by policy</li>
+    </ul>
+  </section>
 
-<footer>
-  <div class="wrap">
-    <p><strong>Author</strong> — David Idemudia Odige (<a href="https://github.com/OdigieDavidIdemudia">@OdigieDavidIdemudia</a>)</p>
-    <p>Dual-use security research. Authorised testing only.</p>
-  </div>
-</footer>
+  <!-- Attribution -->
+  <section class="attribution rule-border">
+    <h2>⦁ Attribution</h2>
+    <p>Designed & built by <a href="https://github.com/OdigieDavidIdemudia">David Idemudia Odige</a>. AgentIde is an open‑source framework for evaluating endpoint security resilience.</p>
+    <p>Assessment data: SOC assessment run on DESKTOP-L07M1SS, exported 2026‑10‑05. 8 modules tested, 5 resisted, 3 failed.</p>
+  </section>
 
-<script>
-// Theme toggle. Three states resolved once, then persisted; the inline media
-// query in CSS handles the no-JS default.
-(function () {
-  var root = document.documentElement;
-  var btn = document.getElementById('theme-toggle');
-  var stored = null;
-  try { stored = localStorage.getItem('agentide-theme'); } catch (e) { /* private mode */ }
-  if (stored === 'dark' || stored === 'light') root.setAttribute('data-theme', stored);
-  btn.addEventListener('click', function () {
-    var dark = getComputedStyle(root).getPropertyValue('--bg').trim() === '#141414';
-    var next = dark ? 'light' : 'dark';
-    root.setAttribute('data-theme', next);
-    try { localStorage.setItem('agentide-theme', next); } catch (e) { /* ignore */ }
-  });
-})();
-</script>
+  <!-- Fixed footer / Dual Use Warning -->
+  <footer class="footer">
+    <strong>Dual‑use warning:</strong> AgentIDE stops security services, kills vendor processes, and installs a hardened SYSTEM service that resists removal. Use only on systems you own or have written authorisation to test. Unauthorised use is illegal. <strong>Assessment methodology and scoring model are published — operational detail is withheld.</strong>
+  </footer>
 
 </body>
 </html>
