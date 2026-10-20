@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 430" width="1200" height="430" role="img" aria-labelledby="arch-title arch-desc">
+  <title id="arch-title">AgentIde assessment architecture</title>
+  <desc id="arch-desc">Four blocks connected in sequence: the design standard, the dashboard, the agent service, and the endpoint under assessment, with control flowing forward and results flowing back.</desc>
+
+  <rect width="1200" height="430" fill="#F4F2EC"/>
+
+  <text x="40" y="52" font-family="Consolas, 'Courier New', monospace" font-size="16" letter-spacing="4" fill="#6B6B66">ASSESSMENT ARCHITECTURE</text>
+  <rect x="40" y="68" width="104" height="5" fill="#B45309"/>
+
+  <!-- control arrows -->
+  <path d="M276 205 H306" stroke="#141414" stroke-width="5" fill="none"/>
+  <polygon points="306,194 320,205 306,216" fill="#141414"/>
+  <path d="M581 205 H611" stroke="#141414" stroke-width="5" fill="none"/>
+  <polygon points="611,194 625,205 611,216" fill="#141414"/>
+  <path d="M886 205 H916" stroke="#141414" stroke-width="5" fill="none"/>
+  <polygon points="916,194 930,205 916,216" fill="#141414"/>
+
+  <!-- return arrows -->
+  <path d="M312 288 H286" stroke="#B45309" stroke-width="4" stroke-dasharray="8 8" fill="none"/>
+  <polygon points="286,279 274,288 286,297" fill="#B45309"/>
+  <path d="M617 288 H591" stroke="#B45309" stroke-width="4" stroke-dasharray="8 8" fill="none"/>
+  <polygon points="591,279 579,288 591,297" fill="#B45309"/>
+  <path d="M922 288 H896" stroke="#B45309" stroke-width="4" stroke-dasharray="8 8" fill="none"/>
+  <polygon points="896,279 884,288 896,297" fill="#B45309"/>
+
+  <!-- block 1: design -->
+  <rect x="23" y="118" width="255" height="270" fill="#141414"/>
+  <rect x="15" y="110" width="255" height="270" fill="#FAFAF7" stroke="#141414" stroke-width="5"/>
+  <rect x="15" y="110" width="255" height="52" fill="#141414"/>
+  <text x="33" y="144" font-family="Consolas, 'Courier New', monospace" font-size="17" font-weight="bold" letter-spacing="3" fill="#FFFFFF">DESIGN</text>
+  <rect x="97" y="185" width="90" height="95" fill="#F4F2EC" stroke="#141414" stroke-width="4"/>
+  <path d="M112 205 H172 M112 220 H160 M112 235 H172" stroke="#6B6B66" stroke-width="4"/>
+  <text x="142" y="264" text-anchor="middle" font-family="Consolas, 'Courier New', monospace" font-size="20" font-weight="bold" fill="#B45309">{ }</text>
+  <text x="142" y="340" text-anchor="middle" font-family="Consolas, 'Courier New', monospace" font-size="14" letter-spacing="1" fill="#6B6B66">assessment standard</text>
+
+  <!-- block 2: dashboard -->
+  <rect x="328" y="118" width="255" height="270" fill="#141414"/>
+  <rect x="320" y="110" width="255" height="270" fill="#FAFAF7" stroke="#141414" stroke-width="5"/>
+  <rect x="320" y="110" width="255" height="52" fill="#141414"/>
+  <text x="338" y="144" font-family="Consolas, 'Courier New', monospace" font-size="17" font-weight="bold" letter-spacing="3" fill="#FFFFFF">DASHBOARD</text>
+  <rect x="384" y="185" width="130" height="95" fill="#F4F2EC" stroke="#141414" stroke-width="4"/>
+  <rect x="384" y="185" width="130" height="22" fill="#141414"/>
+  <rect x="392" y="192" width="7" height="7" fill="#B45309"/>
+  <rect x="404" y="192" width="7" height="7" fill="#6B6B66"/>
+  <rect x="400" y="222" width="48" height="38" fill="#B45309"/>
+  <rect x="458" y="222" width="46" height="8" fill="#6B6B66"/>
+  <rect x="458" y="238" width="34" height="8" fill="#6B6B66"/>
+  <text x="447" y="340" text-anchor="middle" font-family="Consolas, 'Courier New', monospace" font-size="14" letter-spacing="1" fill="#6B6B66">scoring + reports</text>
+
+  <!-- block 3: agent -->
+  <rect x="633" y="118" width="255" height="270" fill="#141414"/>
+  <rect x="625" y="110" width="255" height="270" fill="#FAFAF7" stroke="#141414" stroke-width="5"/>
+  <rect x="625" y="110" width="255" height="52" fill="#141414"/>
+  <text x="643" y="144" font-family="Consolas, 'Courier New', monospace" font-size="17" font-weight="bold" letter-spacing="3" fill="#FFFFFF">AGENT</text>
+  <rect x="685" y="188" width="96" height="90" fill="#F4F2EC" stroke="#141414" stroke-width="4"/>
+  <rect x="703" y="206" width="60" height="52" fill="#B45309"/>
+  <rect x="717" y="220" width="32" height="22" fill="#141414"/>
+  <path d="M693 199 H710 M693 216 H710 M693 233 H710 M693 250 H710 M756 199 H773 M756 216 H773 M756 233 H773 M756 250 H773" stroke="#141414" stroke-width="4"/>
+  <text x="752" y="340" text-anchor="middle" font-family="Consolas, 'Courier New', monospace" font-size="14" letter-spacing="1" fill="#6B6B66">Go service / SYSTEM</text>
+
+  <!-- block 4: endpoint -->
+  <rect x="938" y="118" width="255" height="270" fill="#141414"/>
+  <rect x="930" y="110" width="255" height="270" fill="#FAFAF7" stroke="#141414" stroke-width="5"/>
+  <rect x="930" y="110" width="255" height="52" fill="#141414"/>
+  <text x="948" y="144" font-family="Consolas, 'Courier New', monospace" font-size="17" font-weight="bold" letter-spacing="3" fill="#FFFFFF">ENDPOINT</text>
+  <rect x="1030" y="185" width="56" height="66" fill="#B45309"/>
+  <rect x="1038" y="251" width="40" height="18" fill="#B45309"/>
+  <rect x="1046" y="269" width="24" height="12" fill="#B45309"/>
+  <rect x="1038" y="197" width="40" height="44" fill="#141414"/>
+  <rect x="1050" y="208" width="12" height="9" fill="#F59E0B"/>
+  <rect x="1054" y="217" width="4" height="13" fill="#F59E0B"/>
+  <text x="1058" y="340" text-anchor="middle" font-family="Consolas, 'Courier New', monospace" font-size="14" letter-spacing="1" fill="#6B6B66">EDR / XDR product</text>
+</svg>

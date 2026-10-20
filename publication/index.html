@@ -1,182 +1,880 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AgentIde — Measuring What Endpoint Security Actually Stops</title>
-  <style>
-    :root {
-      --ink: #141414;
-      --muted: #6b7280;
-      --rule: #e5e7eb;
-      --accent: #b45309;
-      --surface: #ffffff;
-      --shadow-hard: 5px 5px 0 var(--ink);
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>AgentIde — Assessment Documentation</title>
+<meta name="description" content="A module-driven endpoint assessment instrument: MITRE ATT&CK-mapped technique checks, deterministic scoring, and an auditable report. Methodology, scope, limitations, and one real blackbox run.">
+<meta property="og:title" content="AgentIde — Assessment Documentation">
+<meta property="og:description" content="MITRE ATT&CK-mapped technique checks against an EDR/XDR product, with deterministic scoring and an auditable report. Method, findings, scope, and limitations.">
+<meta property="og:type" content="article">
+<meta property="og:image" content="https://odigiedavididemudia.github.io/AgentIde/publication/assets/cover-agentide.svg">
+<meta name="author" content="David Idemudia Odige">
+<link rel="canonical" href="https://odigiedavididemudia.github.io/AgentIde/publication/">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "TechArticle",
+  "headline": "AgentIde — Assessment Documentation",
+  "description": "A module-driven endpoint assessment instrument: MITRE ATT&CK-mapped technique checks, deterministic scoring, and an auditable report.",
+  "url": "https://odigiedavididemudia.github.io/AgentIde/publication/",
+  "image": "https://odigiedavididemudia.github.io/AgentIde/publication/assets/cover-agentide.svg",
+  "inLanguage": "en",
+  "datePublished": "2026-10-05",
+  "dateModified": "2026-10-20",
+  "keywords": "endpoint assessment, EDR, XDR, MITRE ATT&CK, security instrumentation, proof of concept",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "David Idemudia Odige",
+      "url": "https://github.com/OdigieDavidIdemudia"
     }
+  ]
+}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Crect%20width='100'%20height='100'%20fill='%23141414'/%3E%3Cpath%20d='M50%2018%20L78%2030%20V52%20C78%2070%2065%2080%2050%2086%20C35%2080%2022%2070%2022%2052%20V30%20Z'%20fill='none'%20stroke='%23F59E0B'%20stroke-width='8'/%3E%3Crect%20x='43'%20y='44'%20width='14'%20height='22'%20fill='%23F59E0B'/%3E%3C/svg%3E">
+<style>
+/* ==========================================================================
+   AgentIde publication — personal-design-standard-v1
+   Variant: neobrutalism structure x minimalism restraint x 8-bit geometry
+   Type pairing: technicalMono (Space Grotesk / Inter / JetBrains Mono)
 
-    *, *::before, *::after { box-sizing: border-box; }
+   Discipline:
+   - hard borders, visible structure, blocky geometry: kept
+   - hard offset shadow: ONLY the hero frame and figures (two element classes)
+   - no background texture, no dot grid, no filled badges everywhere
+   - accent rationed: section numerals, links, focus, one key rule
+   - status always colour + glyph + text label
+   ========================================================================== */
 
-    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+:root {
+  /* spacing scale */
+  --xxs: 4px; --xs: 8px; --sm: 12px; --md: 16px; --lg: 24px;
+  --xl: 32px; --2xl: 48px; --3xl: 64px; --4xl: 96px;
 
-    body {
-      margin: 0;
-      padding: 40px 44px 96px;
-      background: var(--surface);
-      color: var(--ink);
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      font-size: 11pt;
-      line-height: 1.6;
-      overflow-x: hidden;
-    }
+  /* type scale */
+  --t-xs: 12.8px; --t-sm: 14.4px; --t-base: 16px; --t-lg: 20px;
+  --t-xl: 25px; --t-2xl: 31px; --t-3xl: 39px; --t-4xl: 49px;
+  --lh-tight: 1.15; --lh-body: 1.6; --lh-relaxed: 1.75;
 
-    @media (prefers-reduced-motion: reduce) {
-      * { transition: none !important; }
-    }
+  /* motion */
+  --d-fast: 150ms; --d-base: 220ms;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
 
-    /* ── Hero / Cover ── */
-    .cover { border-bottom: 2px solid var(--rule); padding-bottom: 24px; margin-bottom: 32px; }
-    .cover .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
-    .cover .brand-mark {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 28px; height: 28px;
-      background: var(--accent); color: var(--ink);
-      font-weight: 700; font-size: 10pt;
-    }
-    .cover .brand-name { font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; font-size: 10pt; }
-    .cover h1 { margin: 0 0 8px; font-size: 22pt; letter-spacing: -0.01em; }
-    .cover-sub { margin: 0 0 20px; color: var(--muted); font-size: 10pt; }
+  /* structure */
+  --bw: 2px;
+  --bw-lg: 3px;
+  --br: 4px;
+  --shadow-hard: 5px 5px 0 var(--fg);
 
-    /* ── Problem ── */
-    .problem { margin: 32px 0; }
-    .problem h2 { margin: 0 0 12px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
-    .problem p { margin: 0; color: var(--muted); }
+  --maxw: 1200px;
+  --gutter: 24px;
+  --prose: 46rem;
 
-    /* ── Architecture ── */
-    .architecture { margin: 32px 0; }
-    .architecture h2 { margin: 0 0 12px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
-    .arch-list { list-style: none; padding: 0; margin: 0; }
-    .arch-list li { margin: 8px 0; padding: 8px 12px; background: var(--rule); border: 1px solid var(--rule); }
-    .arch-list .label { font-weight: 700; color: var(--accent); }
+  /* colour — light */
+  --bg: #FAFAFA;
+  --surface: #F1F1F1;
+  --raised: #FFFFFF;
+  --fg: #141414;
+  --fg-2: #656565;
+  --line: #E4E4E4;
+  --accent: #B45309;
+  --warn: #B45309;
 
-    /* ── Assessment Lifecycle ── */
-    .lifecycle { margin: 32px 0; }
-    .lifecycle h2 { margin: 0 0 12px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
-    .lifecycle ul { list-style: none; padding: 0; margin: 0; }
-    .lifecycle li { margin: 6px 0; padding: 6px 12px; background: var(--surface); border: 1px solid var(--rule); }
+  /* status — always paired with a label */
+  --pass: #15803D;
+  --fail: #B91C1C;
+  --partial: #B45309;
+  --na: #656565;
+}
 
-    /* ── Self-Protection ── */
-    .selfprotection { margin: 32px 0; }
-    .selfprotection h2 { margin: 0 0 12px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
-    .selfprotection ul { list-style: none; padding: 0; margin: 0; }
-    .selfprotection li { margin: 6px 0; padding: 6px 12px; background: var(--rule); border: 1px solid var(--rule); position: relative; }
-    .selfprotection li::before {
-      content: '●';
-      position: absolute;
-      left: 12px;
-      color: var(--accent);
-      font-size: 8pt;
-    }
+/* Dark tokens apply from either signal: the OS preference (unless the user
+   explicitly chose light) or an explicit data-theme="dark". */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141414;
+    --surface: #1E1E1E;
+    --raised: #242424;
+    --fg: #FAFAFA;
+    --fg-2: #9A9A9A;
+    --line: #2E2E2E;
+    --accent: #F59E0B;
+    --warn: #F0B429;
+    --pass: #4ADE80;
+    --fail: #F87171;
+    --partial: #F59E0B;
+    --na: #9A9A9A;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141414;
+  --surface: #1E1E1E;
+  --raised: #242424;
+  --fg: #FAFAFA;
+  --fg-2: #9A9A9A;
+  --line: #2E2E2E;
+  --accent: #F59E0B;
+  --warn: #F0B429;
+  --pass: #4ADE80;
+  --fail: #F87171;
+  --partial: #F59E0B;
+  --na: #9A9A9A;
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+:root[data-theme="light"] { color-scheme: light; }
 
-    /* ── Limitations ── */
-    .limitations { margin: 32px 0; }
-    .limitations h2 { margin: 0 0 12px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
-    .limitations ul { list-style: none; padding: 0; margin: 0; }
-    .limitations li { margin: 6px 0; padding: 6px 12px; background: var(--surface); border: 1px solid var(--rule); }
+*, *::before, *::after { box-sizing: border-box; }
 
-    /* ── Attribution ── */
-    .attribution { margin: 32px 0; padding-top: 32px; border-top: 1px solid var(--rule); }
-    .attribution h2 { margin: 0 0 8px; font-size: 16pt; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
-    .attribution p { margin: 0; color: var(--muted); font-size: 9pt; }
+html { -webkit-text-size-adjust: 100%; }
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
 
-    /* ── Footer / Dual Use Warning ── */
-    .footer { position: fixed; left: 0; right: 0; bottom: 0; padding: 16px 44px; background: var(--surface); border-top: 1px solid var(--rule); color: var(--muted); font-size: 8pt; }
-    .footer a { color: var(--accent); text-decoration: none; }
-    .footer a:hover { text-decoration: underline; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: var(--t-base);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+}
 
-    /* ── 8bit / Neobrutalist enhancements ── */
-    .neon-text { text-shadow: 2px 2px 0 var(--muted); }
-    .rule-border { border: 2px solid var(--rule); }
-    .accent-border { border: 3px solid var(--accent); }
+/* ---------- type: the primary hierarchy ---------- */
+h1, h2, h3 {
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-weight: 700;
+  line-height: var(--lh-tight);
+  letter-spacing: -0.025em;
+  margin: 0 0 var(--md);
+}
+h1 { font-size: clamp(2.2rem, 6vw, var(--t-4xl)); }
+h2 { font-size: clamp(1.55rem, 3.4vw, var(--t-2xl)); }
+h3 {
+  font-size: var(--t-lg);
+  margin-top: var(--2xl);
+  letter-spacing: -0.015em;
+}
+p, ul, ol { margin: 0 0 var(--lg); }
+ul, ol { padding-left: 1.3em; }
+li { margin-bottom: var(--xs); }
+li::marker { color: var(--fg-2); }
+strong { font-weight: 600; }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:hover { text-decoration-thickness: 2px; }
 
-    @media (max-width: 768px) {
-      body { padding: 24px; }
-      .cover-sub { font-size: 9pt; }
-      .attribution p { font-size: 8pt; }
-    }
-  </style>
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.skip {
+  position: absolute; left: -9999px; top: 0;
+  background: var(--raised); color: var(--fg);
+  padding: var(--sm) var(--md);
+  border: var(--bw-lg) solid var(--fg);
+  font-weight: 600; z-index: 100;
+}
+.skip:focus { left: var(--md); top: var(--md); }
+
+/* ---------- layout ---------- */
+.max { max-width: var(--maxw); margin-inline: auto; padding-inline: var(--gutter); }
+
+/* ---------- top dual-use bar: above the fold, not buried ---------- */
+.topbar {
+  background: var(--surface);
+  border-bottom: var(--bw) solid var(--fg);
+}
+.topbar-inner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--xs) var(--sm);
+  padding-block: var(--xs);
+}
+.topbar-tag {
+  font-family: "JetBrains Mono", monospace;
+  font-size: var(--t-xs); font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase;
+  color: var(--warn);
+  border-left: 4px solid var(--warn);
+  padding-left: var(--xs);
+  white-space: nowrap;
+}
+.topbar p {
+  margin: 0;
+  font-size: var(--t-sm);
+  color: var(--fg-2);
+}
+.topbar a { color: var(--fg); text-decoration-color: var(--accent); }
+
+/* ---------- hero ---------- */
+.hero { padding-top: var(--3xl); }
+
+.hero-frame {
+  border: var(--bw-lg) solid var(--fg);
+  border-radius: var(--br);
+  box-shadow: var(--shadow-hard);
+  background: var(--raised);
+  overflow: hidden;
+  transition: transform var(--d-fast) var(--ease-standard),
+              box-shadow var(--d-fast) var(--ease-standard);
+}
+.hero-frame:hover { transform: translate(3px, 3px); box-shadow: 2px 2px 0 var(--fg); }
+.hero-frame img { display: block; width: 100%; height: auto; }
+
+.title-block { margin-top: var(--2xl); }
+
+.title-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--md); flex-wrap: wrap;
+}
+
+/* eyebrow: rule + mono label, no filled badge */
+.eyebrow {
+  display: inline-flex; align-items: center; gap: var(--xs);
+  font-family: "JetBrains Mono", monospace;
+  font-size: var(--t-xs); font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: var(--fg-2);
+}
+.eyebrow::before { content: ""; width: 32px; height: 3px; background: var(--accent); }
+
+.dek {
+  font-size: var(--t-lg);
+  color: var(--fg-2);
+  margin: var(--lg) 0 0;
+  max-width: 42rem;
+  line-height: var(--lh-relaxed);
+}
+
+/* tags: blocky outline, flat, no shadow, one accent */
+.tags { display: flex; flex-wrap: wrap; gap: var(--xs); margin-top: var(--xl); }
+.tag {
+  font-family: "JetBrains Mono", monospace;
+  font-size: var(--t-xs); font-weight: 700;
+  padding: var(--xxs) var(--sm);
+  border: var(--bw) solid var(--fg);
+  border-radius: var(--br);
+  background: transparent;
+  color: var(--fg);
+}
+.tag--accent { color: var(--accent); border-color: var(--accent); }
+
+/* ---------- shell: TOC rail + prose ---------- */
+.shell {
+  max-width: var(--maxw);
+  margin: var(--4xl) auto 0;
+  padding-inline: var(--gutter);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--2xl);
+  align-items: start;
+}
+@media (min-width: 1024px) {
+  .shell { grid-template-columns: 240px minmax(0, 1fr); gap: var(--3xl); }
+}
+.prose { max-width: var(--prose); min-width: 0; }
+.toc-desktop, .toc-m { min-width: 0; }
+
+/* TOC: a rule and a list, not a box */
+.toc { border-top: var(--bw) solid var(--fg); padding-top: var(--md); }
+@media (min-width: 1024px) { .toc { position: sticky; top: var(--xl); } }
+.toc h2 {
+  font-family: "JetBrains Mono", monospace;
+  font-size: var(--t-xs); font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: var(--fg-2); margin: 0 0 var(--sm);
+}
+.toc ol { list-style: none; margin: 0; padding: 0; counter-reset: toc; }
+.toc li { counter-increment: toc; margin: 0; }
+.toc a {
+  display: flex; gap: var(--xs); align-items: baseline;
+  color: var(--fg-2); text-decoration: none;
+  padding: var(--xxs) 0;
+  font-size: var(--t-sm);
+  transition: color var(--d-fast) var(--ease-standard);
+}
+.toc a::before {
+  content: counter(toc, decimal-leading-zero);
+  font-family: "JetBrains Mono", monospace;
+  font-size: var(--t-xs); color: var(--accent); font-weight: 700;
+}
+.toc a:hover { color: var(--fg); }
+
+/* mobile TOC: collapsible so it never pushes the article below the fold */
+.toc-m { border-top: var(--bw) solid var(--fg); margin-bottom: var(--lg); }
+.toc-m > summary {
+  list-style: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sm);
+  font-family: "JetBrains Mono", monospace;
+  font-size: var(--t-xs); font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: var(--fg-2);
+  min-height: 44px;
+  padding: var(--xs) 0;
+}
+.toc-m > summary::-webkit-details-marker { display: none; }
+.toc-m > summary::after { content: "+"; font-size: var(--t-lg); color: var(--accent); line-height: 1; }
+.toc-m[open] > summary::after { content: "\2212"; }
+.toc-m[open] > summary { border-bottom: 1px solid var(--line); }
+.toc-m .toc { border-top: 0; padding-top: var(--xs); }
+.toc-m .toc a { padding: var(--sm) 0; min-height: 44px; }
+@media (min-width: 1024px) { .toc-m { display: none; } }
+@media (max-width: 1023px) { .toc-desktop { display: none; } }
+
+/* ---------- sections ---------- */
+section { margin-bottom: var(--3xl); scroll-margin-top: var(--xl); }
+section + section { border-top: var(--bw) solid var(--line); padding-top: var(--3xl); }
+.sec-num {
+  font-family: "JetBrains Mono", monospace;
+  font-size: var(--t-sm); font-weight: 700;
+  color: var(--accent);
+  display: block; margin-bottom: var(--xxs);
+}
+.rule { height: var(--bw); background: var(--fg); border: 0; margin: var(--3xl) 0; }
+
+/* ---------- callouts: left rule, no box, no shadow ---------- */
+.note {
+  border-left: 4px solid var(--accent);
+  padding: var(--xs) 0 var(--xs) var(--lg);
+  margin: var(--xl) 0;
+}
+.note > strong {
+  display: block;
+  font-family: "JetBrains Mono", monospace;
+  font-size: var(--t-xs); font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: var(--xs);
+}
+.note p:last-child { margin-bottom: 0; }
+.note--warn { border-left-color: var(--warn); }
+.note--warn > strong { color: var(--warn); }
+
+/* ---------- code ---------- */
+code {
+  font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  font-size: .875em;
+  background: var(--surface);
+  padding: .1em .35em;
+  border-radius: 3px;
+  overflow-wrap: anywhere;
+}
+pre {
+  background: var(--surface);
+  border: var(--bw) solid var(--fg);
+  border-radius: var(--br);
+  padding: var(--md) var(--lg);
+  overflow-x: auto;
+  margin: 0 0 var(--lg);
+}
+pre code { background: none; padding: 0; white-space: pre; font-size: var(--t-sm); }
+
+/* ---------- tables: rules, not boxes ---------- */
+.tablewrap { overflow-x: auto; margin-bottom: var(--lg); }
+table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
+th, td { text-align: left; padding: var(--sm) var(--md) var(--sm) 0; vertical-align: top; }
+th {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: var(--t-xs); font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--fg-2);
+  border-bottom: var(--bw) solid var(--fg);
+  padding-bottom: var(--xs);
+}
+tbody tr { border-bottom: 1px solid var(--line); }
+tbody tr:last-child { border-bottom: 0; }
+
+/* ---------- status: colour + glyph + label, never colour alone ---------- */
+.st {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: var(--t-xs); font-weight: 700;
+  letter-spacing: .06em;
+  padding: 2px var(--xs);
+  border: var(--bw) solid currentColor;
+  border-radius: var(--br);
+  white-space: nowrap;
+}
+.st::before { content: ""; width: 8px; height: 8px; background: currentColor; flex: 0 0 8px; }
+.st--pass { color: var(--pass); }
+.st--fail { color: var(--fail); }
+.st--partial { color: var(--partial); }
+.st--na { color: var(--na); }
+
+/* ---------- figure — the second hard shadow ---------- */
+figure { margin: var(--2xl) 0; }
+figure img {
+  display: block; width: 100%; height: auto;
+  border: var(--bw-lg) solid var(--fg);
+  border-radius: var(--br);
+  box-shadow: var(--shadow-hard);
+  background: var(--raised);
+}
+figcaption { font-size: var(--t-sm); color: var(--fg-2); margin-top: var(--md); }
+
+/* ---------- byline ---------- */
+.byline {
+  margin-top: var(--xl);
+  padding-top: var(--md);
+  border-top: 1px solid var(--line);
+  max-width: var(--prose);
+}
+.byline-label {
+  font-family: "JetBrains Mono", monospace;
+  font-size: var(--t-xs); font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: var(--fg-2);
+  margin-bottom: var(--xs);
+}
+.byline-names {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: var(--t-base); font-weight: 500;
+  margin: 0;
+}
+.byline-names a { color: var(--fg); text-decoration-color: var(--accent); }
+.byline-names a:hover { color: var(--accent); }
+.authors { display: flex; flex-wrap: wrap; gap: var(--xs); margin-top: var(--sm); }
+.author-chip {
+  font-family: "JetBrains Mono", monospace;
+  font-size: var(--t-xs); font-weight: 700;
+  padding: var(--xxs) var(--sm);
+  border: var(--bw) solid var(--fg);
+  border-radius: var(--br);
+  text-decoration: none;
+  color: var(--fg);
+  display: inline-flex; align-items: center; min-height: 32px;
+}
+.author-chip:hover { background: var(--surface); }
+
+/* ---------- theme toggle ---------- */
+.theme-toggle {
+  font-family: "JetBrains Mono", monospace;
+  font-size: var(--t-xs); font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase;
+  display: inline-flex; align-items: center; gap: var(--xs);
+  min-height: 44px;
+  padding: 0 var(--md);
+  background: transparent;
+  color: var(--fg);
+  border: var(--bw) solid var(--fg);
+  border-radius: var(--br);
+  cursor: pointer;
+  transition: transform var(--d-fast) var(--ease-standard),
+              box-shadow var(--d-fast) var(--ease-standard),
+              background var(--d-fast) var(--ease-standard);
+}
+.theme-toggle:hover { background: var(--surface); transform: translate(2px, 2px); }
+.theme-toggle:active { transform: translate(3px, 3px); }
+.theme-toggle .glyph { font-size: var(--t-base); line-height: 1; }
+
+/* ---------- footer ---------- */
+footer {
+  border-top: var(--bw) solid var(--fg);
+  margin-top: var(--4xl);
+  padding: var(--2xl) 0 var(--3xl);
+  font-size: var(--t-sm);
+  color: var(--fg-2);
+}
+footer .max { display: flex; flex-wrap: wrap; gap: var(--md); align-items: flex-start; justify-content: space-between; }
+footer p { margin: 0; max-width: 34rem; }
+footer .further { font-family: "JetBrains Mono", monospace; font-size: var(--t-xs); }
+
+/* ---------- responsive ---------- */
+@media (max-width: 1023px) {
+  .hero { padding-top: var(--2xl); }
+  .prose { max-width: 100%; }
+  h3 { margin-top: var(--xl); }
+  figure { margin: var(--xl) 0; }
+  .dek { font-size: var(--t-base); }
+}
+@media (max-width: 767px) {
+  .hero { padding-top: var(--lg); }
+  .hero-frame { box-shadow: 3px 3px 0 var(--fg); }
+  figure img { box-shadow: 3px 3px 0 var(--fg); }
+  .shell { margin-top: var(--2xl); gap: var(--xl); }
+  section { margin-bottom: var(--2xl); }
+  section + section { padding-top: var(--2xl); }
+  .rule { margin: var(--2xl) 0; }
+  p, ul, ol { margin-bottom: var(--md); }
+  pre { padding: var(--sm) var(--md); }
+  th, td { padding: var(--sm) var(--sm) var(--sm) 0; }
+  .note { padding-left: var(--md); }
+  .dek { max-width: 100%; }
+  .tags { margin-top: var(--lg); }
+  footer .max { flex-direction: column; }
+}
+@media (max-width: 479px) {
+  .tag { font-size: 11.5px; padding: 3px var(--xs); }
+  .dek { font-size: var(--t-sm); }
+  .authors { gap: var(--xxs); }
+  .author-chip { font-size: 11.5px; }
+  .topbar p { font-size: var(--t-xs); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
+</style>
+<script>
+  /* Apply the stored theme before first paint so switching modes never flashes
+     the wrong background. */
+  (function () {
+    try {
+      var t = localStorage.getItem('agentide-theme');
+      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {}
+  })();
+</script>
 </head>
 <body>
 
-  <!-- Hero / Cover -->
-  <header class="cover rule-border">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true">AI</span>
-      <span class="brand-name neon-text">AgentIde</span>
+<a class="skip" href="#main">Skip to content</a>
+
+<div class="topbar" role="note">
+  <div class="max topbar-inner">
+    <span class="topbar-tag">Dual-use research</span>
+    <p>Authorised testing only — run this on systems you own or have written permission to assess. <a href="#safety">Safety &amp; authorisation</a></p>
+  </div>
+</div>
+
+<header class="hero max">
+  <div class="hero-frame">
+    <img src="assets/cover-agentide.svg" width="1600" height="900" alt="An assessment console lists eight technique modules with pass, fail, and timeout results, connected by a scan line to a pixel-art shield representing the endpoint security product under test.">
+  </div>
+
+  <div class="title-block">
+    <div class="title-head">
+      <span class="eyebrow">Reference implementation</span>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch colour theme">
+        <span class="glyph" aria-hidden="true">◐</span><span class="label">Theme</span>
+      </button>
     </div>
-    <h1>Measuring What Endpoint Security Actually Stops</h1>
-    <p class="cover-sub">EDR/XDR Assessment & Reporting Framework</p>
-  </header>
+    <h1>AgentIde</h1>
+    <p class="dek">A module-driven endpoint assessment instrument. It runs MITRE ATT&amp;CK-mapped technique checks against an EDR/XDR product, scores what resisted, and exports an auditable report.</p>
 
-  <!-- The problem being solved -->
-  <section class="problem rule-border">
-    <h2>⦁ The Problem</h2>
-    <p>Most endpoint security products claim to "detect and resist" adversary techniques, but operators have no independent way to verify what actually stops at the endpoint. AgentIde fills this gap with a module-driven assessment that maps every result to MITRE ATT&CK, producing auditable severity scores, findings, and reports — all without model generation.</p>
-  </section>
+    <div class="tags">
+      <span class="tag tag--accent">MITRE ATT&amp;CK</span>
+      <span class="tag">blackbox</span>
+      <span class="tag">deterministic exports</span>
+      <span class="tag">EDR / XDR</span>
+    </div>
 
-  <!-- Architecture -->
-  <section class="architecture rule-border">
-    <h2>⦁ Architecture</h2>
-    <ul class="arch-list">
-      <li><span class="label">Agent</span> — Windows service, Go runtime, kernel‑mode resistant hooks</li>
-      <li><span class="label">Dashboard</span> — React 19 + TanStack Start SSR in a Cloudflare Worker</li>
-      <li><span class="label">Design</span> — Neobrutalist minimalism, 8‑bit aesthetic, deliberate restraint</li>
-    </ul>
-  </section>
+    <div class="byline">
+      <p class="byline-label">Written by</p>
+      <p class="byline-names">
+        <a href="https://github.com/OdigieDavidIdemudia" rel="author noopener" target="_blank">David Idemudia Odige</a>
+      </p>
+      <div class="authors">
+        <a class="author-chip" href="https://github.com/OdigieDavidIdemudia" rel="author noopener" target="_blank">@OdigieDavidIdemudia</a>
+      </div>
+    </div>
+  </div>
+</header>
 
-  <!-- How an assessment runs -->
-  <section class="lifecycle rule-border">
-    <h2>⦁ Assessment Lifecycle</h2>
-    <ol class="lifecycle-ol">
-      <li>Agent receives assessment configuration from dashboard</li>
-      <li>Modules execute techniques against the endpoint</li>
-      <li>Results reported back with result, severity, MITRE mapping</li>
-      <li>Dashboard aggregates findings into structured report</li>
-      <li>Operators export HTML, Markdown, or JSON for review</li>
+<div class="shell">
+  <nav class="toc toc-desktop" aria-label="Contents">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#problem">The problem</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#lifecycle">How an assessment runs</a></li>
+      <li><a href="#findings">Findings — proof of concept</a></li>
+      <li><a href="#mitre">MITRE ATT&amp;CK coverage</a></li>
+      <li><a href="#self-protection">Service self-protection</a></li>
+      <li><a href="#safety">Safety &amp; authorisation</a></li>
+      <li><a href="#limits">Limitations &amp; out of scope</a></li>
+      <li><a href="#summary">Summary</a></li>
+      <li><a href="#authors">Authors &amp; attribution</a></li>
     </ol>
-  </section>
+  </nav>
 
-  <!-- Service self-protection -->
-  <section class="selfprotection rule-border">
-    <h2>✎ Service Self‑Protection</h2>
-    <ul>
-      <li>The agent instes a SYSTEM‑level service that resists removal</li>
-      <li>AMSI and ETW disabling modules ensure technique fidelity</li>
-      <li>Built‑in resilience: watchdog restarts on crash</li>
-      <li>Dual‑use: only use on systems you own or have written authorisation to test</li>
-    </ul>
-  </section>
+  <main class="prose" id="main">
 
-  <!-- Limitations -->
-  <section class="limitations rule-border">
-    <h2>⦁ Limitations & Out of Scope</h2>
-    <ul>
-      <li>No cloud-scale telemetry — assessments are per‑endpoint only</li>
-      <li>No real‑time C2 or lateral‑movement simulation</li>
-      <li>Scoring is deterministic per‑module, not model‑generated</li>
-      <li>Exported reports contain no customer data, tokens, or internal IPs</li>
-    </ul>
-  </section>
+    <details class="toc-m">
+      <summary>Contents</summary>
+      <nav class="toc" aria-label="Contents">
+        <ol>
+          <li><a href="#problem">The problem</a></li>
+          <li><a href="#architecture">Architecture</a></li>
+          <li><a href="#lifecycle">How an assessment runs</a></li>
+          <li><a href="#findings">Findings — proof of concept</a></li>
+          <li><a href="#mitre">MITRE ATT&amp;CK coverage</a></li>
+          <li><a href="#self-protection">Service self-protection</a></li>
+          <li><a href="#safety">Safety &amp; authorisation</a></li>
+          <li><a href="#limits">Limitations &amp; out of scope</a></li>
+          <li><a href="#summary">Summary</a></li>
+          <li><a href="#authors">Authors &amp; attribution</a></li>
+        </ol>
+      </nav>
+    </details>
 
-  <!-- Attribution -->
-  <section class="attribution rule-border">
-    <h2>⦁ Attribution</h2>
-    <p>Designed & built by <a href="https://github.com/OdigieDavidIdemudia">David Idemudia Odige</a>. AgentIde is an open‑source framework for evaluating endpoint security resilience.</p>
-  </section>
+    <section id="problem">
+      <span class="sec-num">01</span>
+      <h2>The problem</h2>
+      <p>Endpoint security products are usually evaluated through vendor claims and third-party lab scores. An operator standing a product up has no independent way to check which adversary techniques actually stop on their own endpoint, in their own configuration.</p>
+      <p>AgentIde closes that gap with a module-driven assessment. Each module executes a technique, records whether it was prevented, detected, or completed, and reports the outcome against a MITRE ATT&amp;CK technique identifier.</p>
+      <p>Detection is not prevention. A product can raise an alert and still let the technique finish. The assessment records the outcome at the endpoint, not the alert in the console — which is the difference between a product that noticed and a control that held.</p>
+      <div class="note">
+        <strong>Scope note</strong>
+        <p>This page documents the method, the scoring model, and the result of one lab run. It deliberately does not publish a parameterised, ready-to-run evasion sequence.</p>
+      </div>
+    </section>
 
-  <!-- Fixed footer / Dual Use Warning -->
-  <footer class="footer">
-    <strong>Dual‑use warning:</strong> AgentIDE stops security services, kills vendor processes, and installs a hardened SYSTEM service that resists removal. Use only on systems you own or have written authorisation to test. Unauthorised use is illegal. <strong>Assessment methodology and scoring model are published — operational detail is withheld.</strong>
-  </footer>
+    <section id="architecture">
+      <span class="sec-num">02</span>
+      <h2>Architecture</h2>
+      <p>Three layers, each with one job: an agent that executes, a dashboard that scores and reports, and a design layer that defines what a valid assessment is.</p>
+
+      <figure>
+        <img src="assets/architecture-agentide.svg" width="1200" height="430" decoding="async" alt="Four blocks in sequence: the design standard, the dashboard, the agent service, and the endpoint under assessment. Control flows forward; results flow back.">
+        <figcaption>The standard defines the assessment, the dashboard orchestrates it, the agent executes it on the endpoint, and results return to be scored and rendered.</figcaption>
+      </figure>
+
+      <h3>Agent</h3>
+      <p>A Windows service written in Go. It discovers installed security products, runs the assessment modules under a selected profile, streams every result over a WebSocket, and records the full path of each file a module creates. That last detail is deliberate: “the technique was blocked” and “we know exactly what it touched” are different guarantees.</p>
+
+      <h3>Dashboard</h3>
+      <p>A React single-page application backed by an Express API and PostgreSQL. It aggregates results, maps each finding to ATT&amp;CK, scores the run, and renders the report. The renderer is deterministic: the same run renders the same HTML twice, so an export can be compared byte for byte.</p>
+
+      <h3>Design layer</h3>
+      <p>The assessment standard is data, not code — which modules run under each profile, how outcomes are weighted, and what counts as a pass. Keeping it separate from the engine means the standard can be reviewed, argued with, and edited without touching the execution path.</p>
+
+      <div class="note">
+        <strong>Minimum viable finding</strong>
+        <p>Every module result carries an outcome, a duration, a MITRE mapping, and a test type. That is the minimum needed to defend a finding months later, when nobody remembers the run.</p>
+      </div>
+    </section>
+
+    <section id="lifecycle">
+      <span class="sec-num">03</span>
+      <h2>How an assessment runs</h2>
+      <ol>
+        <li><strong>Deploy the agent</strong> — installed as a SYSTEM-level service with a bootstrap token. On first contact the dashboard issues a per-host token, so possession of a shared secret alone is not enough to impersonate an existing host.</li>
+        <li><strong>Choose a profile</strong> — <code>rapid</code>, <code>apt</code>, or <code>baseline</code>. Each selects a different subset of the standard; the run in section 04 used <code>rapid</code> with blackbox testing.</li>
+        <li><strong>Execute modules</strong> — technique checks covering execution, credential access, persistence, network behaviour, identity, and anti-tamper resilience.</li>
+        <li><strong>Score and correlate</strong> — results are linked by session and mapped to ATT&amp;CK technique identifiers, then aggregated into a single run score.</li>
+        <li><strong>Report</strong> — pass and fail counts, an overall score, and a written assessment of what was caught and what was not.</li>
+      </ol>
+
+      <p>A module result carries the same fields whether it is read on screen, exported as HTML, or exported as JSON:</p>
+      <pre><code>{
+  "module": "lolbin",
+  "result": "pass",
+  "mitre": "T1059.001",
+  "test_type": "blackbox",
+  "duration_ms": 6900
+}</code></pre>
+
+      <div class="note note--warn">
+        <strong>Evidence, not certification</strong>
+        <p>A run describes one endpoint, at one time, under one profile. It is evidence about that configuration — not a certification of the product and not a guarantee about the next build.</p>
+      </div>
+    </section>
+
+    <section id="findings">
+      <span class="sec-num">04</span>
+      <h2>Findings — proof of concept</h2>
+      <p>The published run is a blackbox assessment of a single Windows lab endpoint, <code>DESKTOP-L07M1SS</code>, running Microsoft Defender. It was exported on 2026-10-05 at 16:05 UTC.</p>
+
+      <figure>
+        <img src="assets/scorecard-agentide.svg" width="1200" height="460" decoding="async" alt="Scorecard showing 62.5 percent, 5 of 8 modules passed: performance timeout, malware fail, lolbin pass, network pass, identity pass, antitamper pass, falsepositive pass, reboot fail.">
+        <figcaption>The run at a glance. Five of eight modules passed; the performance module timed out and the reboot module was skipped, both counted as not passed.</figcaption>
+      </figure>
+
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr><th>Module</th><th>Result</th><th>Duration</th><th>MITRE</th><th>Test type</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>performance</code></td><td><span class="st st--partial">TIMEOUT</span></td><td>35.0 s</td><td>Unknown</td><td>blackbox</td></tr>
+            <tr><td><code>malware</code></td><td><span class="st st--fail">FAIL</span></td><td>15.3 s</td><td><code>T1059</code></td><td>blackbox</td></tr>
+            <tr><td><code>lolbin</code></td><td><span class="st st--pass">PASS</span></td><td>6.9 s</td><td><code>T1059.001</code></td><td>blackbox</td></tr>
+            <tr><td><code>network</code></td><td><span class="st st--pass">PASS</span></td><td>29.8 s</td><td><code>T1071.001</code></td><td>blackbox</td></tr>
+            <tr><td><code>identity</code></td><td><span class="st st--pass">PASS</span></td><td>269 ms</td><td><code>T1110.003</code></td><td>blackbox</td></tr>
+            <tr><td><code>antitamper</code></td><td><span class="st st--pass">PASS</span></td><td>292 ms</td><td><code>T1562.001</code></td><td>blackbox</td></tr>
+            <tr><td><code>falsepositive</code></td><td><span class="st st--pass">PASS</span></td><td>6.8 s</td><td><code>T1562</code></td><td>blackbox</td></tr>
+            <tr><td><code>reboot</code></td><td><span class="st st--fail">FAIL</span></td><td>0 ms</td><td><code>T1547.001</code></td><td>blackbox</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>Score: 62.5%</strong> — five of eight modules passed. The performance module exceeded its 35-second budget and was forcefully timed out. The reboot module was skipped because a reboot was not permitted on the host; both are recorded as not passed rather than silently discarded.</p>
+
+      <p>One kill/recovery event was observed outside the module score: the agent was externally terminated and recovered automatically after <strong>45m 32s</strong> of downtime, on recovery attempt 5 with three kills recorded for the run.</p>
+
+      <div class="note">
+        <strong>What this run shows</strong>
+        <p>Defender blocked command execution, outbound C2, password spraying, and tamper attempts. It did not remove an EICAR test file within the five-minute check window. Those are findings about one endpoint and one configuration — including the gaps.</p>
+      </div>
+    </section>
+
+    <section id="mitre">
+      <span class="sec-num">05</span>
+      <h2>MITRE ATT&amp;CK coverage</h2>
+      <p>Every module maps to a technique so the result can be compared across products, versions, and configurations. The outcome describes whether the technique was prevented on this endpoint — not whether a console alert fired.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead>
+            <tr><th>Technique</th><th>Name</th><th>Module</th><th>Outcome</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>T1059</code></td><td>Command and Scripting Interpreter</td><td><code>malware</code></td><td><span class="st st--fail">FAIL</span></td></tr>
+            <tr><td><code>T1059.001</code></td><td>PowerShell</td><td><code>lolbin</code></td><td><span class="st st--pass">PASS</span></td></tr>
+            <tr><td><code>T1071.001</code></td><td>Web Protocols</td><td><code>network</code></td><td><span class="st st--pass">PASS</span></td></tr>
+            <tr><td><code>T1110.003</code></td><td>Password Spraying</td><td><code>identity</code></td><td><span class="st st--pass">PASS</span></td></tr>
+            <tr><td><code>T1562.001</code></td><td>Disable or Modify Tools</td><td><code>antitamper</code></td><td><span class="st st--pass">PASS</span></td></tr>
+            <tr><td><code>T1562</code></td><td>Impair Defenses</td><td><code>falsepositive</code></td><td><span class="st st--pass">PASS</span></td></tr>
+            <tr><td><code>T1547.001</code></td><td>Registry Run Keys / Startup Folder</td><td><code>reboot</code></td><td><span class="st st--fail">FAIL</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Status is always carried by a colour, a glyph, and a text label together. Colour alone never carries meaning, in the interface or in the exported report.</p>
+    </section>
+
+    <section id="self-protection">
+      <span class="sec-num">06</span>
+      <h2>Service self-protection</h2>
+      <p>An assessment instrument that a security product can silently stop is not a reliable instrument. The agent is built in layers so that being terminated is an observable event, not a quiet gap in the results.</p>
+
+      <h3>Watchdog</h3>
+      <p>A child process watches a heartbeat. If a module exits without restoring the vendor state it changed, the watchdog re-enables the vendor after a fixed deadline rather than leaving the endpoint in a degraded state.</p>
+
+      <h3>Guardian service</h3>
+      <p>A second Windows service keeps the first one alive. It recreates the service registration if it is deleted, restores its start type, and restores the binary from a backup copy if the executable is removed.</p>
+
+      <h3>Hardened service descriptor</h3>
+      <p>The service is registered so that stop, reconfigure, and delete requests are denied to SYSTEM. A user-mode product cannot quietly disable the agent through the ordinary service control path.</p>
+
+      <h3>Escalating recovery</h3>
+      <p>Restarts follow a short escalating schedule. The run in section 04 measured a 45m 32s gap between an external kill and full recovery — visible in the report, not hidden behind a “still running” status.</p>
+
+      <div class="note note--warn">
+        <strong>Raises the bar, not a guarantee</strong>
+        <p>A kernel-mode product can still terminate the agent. These layers mitigate that outcome and make it visible; they do not prevent it. The honest claim is resilience with evidence, not invulnerability.</p>
+      </div>
+    </section>
+
+    <section id="safety">
+      <span class="sec-num">07</span>
+      <h2>Safety &amp; authorisation</h2>
+      <div class="note note--warn">
+        <strong>Authorised testing only</strong>
+        <p>AgentIde stops security services, terminates vendor processes, and installs a hardened SYSTEM service that resists removal. Running it on a system you do not control can disable that system's protection and may breach computer-misuse law. Use it only on systems you own or have written authorisation to assess.</p>
+      </div>
+
+      <ul>
+        <li><strong>Written authorisation first.</strong> Define the scope, the endpoint list, and the time window before anything runs.</li>
+        <li><strong>Lab or approved change window.</strong> Do not point it at production endpoints without an approved change and a tested rollback path.</li>
+        <li><strong>Treat results as sensitive.</strong> A report describes exactly where a control failed on a named host.</li>
+        <li><strong>Restore the endpoint.</strong> Confirm the vendor product is re-enabled and the agent removed after the assessment.</li>
+      </ul>
+
+      <p>This page publishes the <strong>method</strong> and the <strong>scoring model</strong>. It withholds copy-paste operational detail that would let an unauthorised actor run a complete undetected assessment. Every example uses reserved values: <code>192.0.2.10</code> (RFC 5737), <code>example.com</code> (RFC 2606), <code>&lt;AGENT_TOKEN&gt;</code>, and port <code>8443</code>. No customer endpoint data, real tokens, internal addresses, or organisation names are published. The endpoint named in section 04 is the author's own lab machine.</p>
+
+      <div class="note">
+        <strong>Educational purpose</strong>
+        <p>This project is published for education and research. It documents how adversary techniques can be assessed against endpoint security products, and what the limits of that assessment are.</p>
+      </div>
+    </section>
+
+    <section id="limits">
+      <span class="sec-num">08</span>
+      <h2>Limitations &amp; out of scope</h2>
+      <ul>
+        <li><strong>One endpoint, point in time.</strong> The published run says nothing about coverage across an estate, and nothing about a different product build.</li>
+        <li><strong>Evidence, not a guarantee.</strong> A pass means the technique was prevented <em>that time</em>, under that profile, on that host.</li>
+        <li><strong>User-mode self-protection.</strong> A kernel-mode product can still terminate the agent; recovery reduces the gap but does not eliminate it.</li>
+        <li><strong>Opinionated weights.</strong> The score is a defensible default, not an industry standard. It is meant to be edited in the design layer.</li>
+        <li><strong>Blackbox only in this run.</strong> No live or inline comparison was performed, so the published result does not separate detection from prevention beyond the module outcome.</li>
+        <li><strong>A timeout is a result.</strong> The performance module is recorded as not passed rather than retried until it succeeds.</li>
+        <li><strong>Reboot requires a window.</strong> Without permission to reboot, the persistence check is skipped and recorded as FAIL.</li>
+        <li><strong>Not hardened for hostile deployment.</strong> This is a proof of concept and has not been through an external security review.</li>
+      </ul>
+    </section>
+
+    <section id="summary">
+      <span class="sec-num">09</span>
+      <h2>Summary</h2>
+      <p>AgentIde is a working proof of concept in three parts: an agent that executes ATT&amp;CK-mapped modules on a real endpoint, a dashboard that scores and reports the run deterministically, and a design layer that keeps the assessment standard reviewable on its own.</p>
+      <p>The run shows that the instrument produces a reproducible, defensible result — including the parts that failed. The most useful output is not the 62.5%. It is the three lines that did not pass, the evidence recorded beside each one, and the recovery gap that proves the agent can be stopped and observed doing it.</p>
+      <p>What the project does not claim is equally important: it is not a certification, not an estate-wide measurement, and not a guarantee against a determined adversary.</p>
+    </section>
+
+    <section id="authors">
+      <span class="sec-num">10</span>
+      <h2>Authors &amp; attribution</h2>
+      <div class="byline">
+        <p class="byline-label">Written by</p>
+        <p class="byline-names">
+          <a href="https://github.com/OdigieDavidIdemudia" rel="author noopener" target="_blank">David Idemudia Odige</a>
+        </p>
+        <div class="authors">
+          <a class="author-chip" href="https://github.com/OdigieDavidIdemudia" rel="author noopener" target="_blank">@OdigieDavidIdemudia</a>
+        </div>
+      </div>
+
+      <p style="margin-top: var(--lg)">Assessment data: AgentIde Security Assessment Report, exported 2026-10-05 16:05 UTC. Lab endpoint, blackbox profile, eight modules. The source repository is <a href="https://github.com/OdigieDavidIdemudia/AgentIde" rel="noopener" target="_blank">OdigieDavidIdemudia/AgentIde</a>.</p>
+
+      <div class="note note--warn">
+        <strong>Educational purposes &amp; ethical usage</strong>
+        <p>This work is published for educational and research purposes only. Do not use it against systems you do not own or have explicit written authorisation to test. Unauthorised use may violate computer-misuse laws, employment terms, and the trust of the users whose endpoints are affected.</p>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  <div class="max">
+    <p>Published for education and research. Authorised testing only — systems you own or have written permission to assess. Method and scoring model published; operational detail withheld.</p>
+    <p>Written by <strong>David Idemudia Odige</strong></p>
+    <p class="further"><a href="https://github.com/OdigieDavidIdemudia/AgentIde" rel="noopener" target="_blank">Repository</a></p>
+  </div>
+</footer>
 
 </body>
+<script>
+  /* Theme toggle. Defaults to the OS preference; an explicit choice is persisted
+     and takes precedence over the system in both directions. */
+  (function () {
+    var root = document.documentElement;
+    var btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+    var label = btn.querySelector('.label');
+    var KEY = 'agentide-theme';
+
+    function systemDark() {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    function current() {
+      return root.getAttribute('data-theme') || (systemDark() ? 'dark' : 'light');
+    }
+    function render() {
+      var mode = current();
+      btn.setAttribute('aria-label', 'Switch to ' + (mode === 'dark' ? 'light' : 'dark') + ' mode');
+      if (label) label.textContent = mode === 'dark' ? 'Light' : 'Dark';
+    }
+    function set(mode) {
+      root.setAttribute('data-theme', mode);
+      try { localStorage.setItem(KEY, mode); } catch (e) {}
+      render();
+    }
+
+    btn.addEventListener('click', function () {
+      set(current() === 'dark' ? 'light' : 'dark');
+    });
+
+    /* Follow OS changes only while no explicit choice has been made. */
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    var onChange = function () { if (!root.getAttribute('data-theme')) render(); };
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    else if (mq.addListener) mq.addListener(onChange);
+
+    render();
+  })();
+</script>
 </html>

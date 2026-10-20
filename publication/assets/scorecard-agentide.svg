@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 460" width="1200" height="460" role="img" aria-labelledby="score-title score-desc">
+  <title id="score-title">Assessment scorecard</title>
+  <desc id="score-desc">Eight module results from a blackbox run against Microsoft Defender: five passed, one timed out, and two failed, for a score of 62.5 percent.</desc>
+
+  <rect width="1200" height="460" fill="#F4F2EC"/>
+
+  <text x="40" y="50" font-family="Consolas, 'Courier New', monospace" font-size="15" letter-spacing="3" fill="#6B6B66">ASSESSMENT RESULT &#183; BLACKBOX &#183; 2026-10-05</text>
+
+  <text x="40" y="146" font-family="Consolas, 'Courier New', monospace" font-size="72" font-weight="bold" fill="#141414">62.5%</text>
+  <text x="44" y="178" font-family="Consolas, 'Courier New', monospace" font-size="15" letter-spacing="2" fill="#B45309">5 OF 8 MODULES PASSED</text>
+
+  <rect x="40" y="202" width="1120" height="4" fill="#141414"/>
+
+  <g font-family="Consolas, 'Courier New', monospace">
+    <!-- row 1 -->
+    <rect x="70" y="226" width="250" height="96" fill="#FAFAF7" stroke="#141414" stroke-width="4"/>
+    <rect x="70" y="226" width="250" height="8" fill="#B45309"/>
+    <text x="86" y="266" font-size="16" fill="#141414">performance</text>
+    <text x="86" y="298" font-size="18" font-weight="bold" fill="#B45309">TIMEOUT</text>
+
+    <rect x="340" y="226" width="250" height="96" fill="#FAFAF7" stroke="#141414" stroke-width="4"/>
+    <rect x="340" y="226" width="250" height="8" fill="#B91C1C"/>
+    <text x="356" y="266" font-size="16" fill="#141414">malware</text>
+    <text x="356" y="298" font-size="18" font-weight="bold" fill="#B91C1C">FAIL</text>
+
+    <rect x="610" y="226" width="250" height="96" fill="#FAFAF7" stroke="#141414" stroke-width="4"/>
+    <rect x="610" y="226" width="250" height="8" fill="#15803D"/>
+    <text x="626" y="266" font-size="16" fill="#141414">lolbin</text>
+    <text x="626" y="298" font-size="18" font-weight="bold" fill="#15803D">PASS</text>
+
+    <rect x="880" y="226" width="250" height="96" fill="#FAFAF7" stroke="#141414" stroke-width="4"/>
+    <rect x="880" y="226" width="250" height="8" fill="#15803D"/>
+    <text x="896" y="266" font-size="16" fill="#141414">network</text>
+    <text x="896" y="298" font-size="18" font-weight="bold" fill="#15803D">PASS</text>
+
+    <!-- row 2 -->
+    <rect x="70" y="338" width="250" height="96" fill="#FAFAF7" stroke="#141414" stroke-width="4"/>
+    <rect x="70" y="338" width="250" height="8" fill="#15803D"/>
+    <text x="86" y="378" font-size="16" fill="#141414">identity</text>
+    <text x="86" y="410" font-size="18" font-weight="bold" fill="#15803D">PASS</text>
+
+    <rect x="340" y="338" width="250" height="96" fill="#FAFAF7" stroke="#141414" stroke-width="4"/>
+    <rect x="340" y="338" width="250" height="8" fill="#15803D"/>
+    <text x="356" y="378" font-size="16" fill="#141414">antitamper</text>
+    <text x="356" y="410" font-size="18" font-weight="bold" fill="#15803D">PASS</text>
+
+    <rect x="610" y="338" width="250" height="96" fill="#FAFAF7" stroke="#141414" stroke-width="4"/>
+    <rect x="610" y="338" width="250" height="8" fill="#15803D"/>
+    <text x="626" y="378" font-size="16" fill="#141414">falsepositive</text>
+    <text x="626" y="410" font-size="18" font-weight="bold" fill="#15803D">PASS</text>
+
+    <rect x="880" y="338" width="250" height="96" fill="#FAFAF7" stroke="#141414" stroke-width="4"/>
+    <rect x="880" y="338" width="250" height="8" fill="#B91C1C"/>
+    <text x="896" y="378" font-size="16" fill="#141414">reboot</text>
+    <text x="896" y="410" font-size="18" font-weight="bold" fill="#B91C1C">FAIL</text>
+  </g>
+</svg>
