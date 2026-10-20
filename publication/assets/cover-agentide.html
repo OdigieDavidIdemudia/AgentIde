@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AgentIde cover source</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Press+Start+2P&family=Silkscreen:wght@400;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    width: 1600px; height: 900px; margin: 0; overflow: hidden;
+    background: #141414; color: #FAFAFA;
+    font-family: "JetBrains Mono", Consolas, monospace;
+    -webkit-font-smoothing: antialiased;
+  }
+  .stage {
+    position: relative; width: 1600px; height: 900px; overflow: hidden;
+    background:
+      linear-gradient(90deg, #00D4AA 0 10px, transparent 10px) left top / 100% 100% no-repeat,
+      #141414;
+  }
+  .stage::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background-image:
+      linear-gradient(#1B1B1B 1px, transparent 1px),
+      linear-gradient(90deg, #1B1B1B 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: .55;
+  }
+  .brand { position: absolute; left: 80px; top: 58px; display: flex; align-items: center; gap: 18px; }
+  .brand-mark {
+    display: block; width: 82px; height: 82px;
+    filter: drop-shadow(6px 6px 0 #000);
+  }
+  .brand-name {
+    font-family: "Silkscreen", "Space Grotesk", sans-serif;
+    font-size: 31px; font-weight: 700; line-height: 1; letter-spacing: .03em;
+  }
+  .brand-sub {
+    margin-top: 8px; color: #A8A8A8; font-size: 10px; line-height: 1.4;
+    letter-spacing: .18em; text-transform: uppercase;
+  }
+  .top-meta {
+    position: absolute; right: 80px; top: 70px; text-align: right;
+    font-size: 11px; line-height: 1.8; letter-spacing: .13em; text-transform: uppercase;
+  }
+  .top-meta .mint { color: #00D4AA; }
+  .top-meta .dim { color: #A8A8A8; font-size: 9px; }
+
+  .headline {
+    position: absolute; left: 80px; top: 224px;
+    font-family: "Silkscreen", "Space Grotesk", sans-serif;
+    font-size: 56px; font-weight: 700; line-height: 1.08; letter-spacing: .005em;
+    text-transform: uppercase;
+  }
+  .headline .accent { display: block; color: #00D4AA; }
+  .sub {
+    position: absolute; left: 80px; top: 382px; width: 690px;
+    color: #A8A8A8; font-size: 17px; line-height: 1.65;
+  }
+  .sub strong { color: #FAFAFA; font-weight: 500; }
+
+  .score {
+    position: absolute; left: 80px; top: 506px; width: 430px; height: 196px;
+    padding: 18px 20px; border: 4px solid #FAFAFA; background: #242424;
+    box-shadow: 8px 8px 0 #000;
+  }
+  .score-label {
+    color: #F5A623; font-size: 10px; font-weight: 700;
+    letter-spacing: .16em; text-transform: uppercase;
+  }
+  .score-main { display: flex; align-items: flex-end; gap: 16px; margin-top: 4px; }
+  .score-big {
+    font-family: "Silkscreen", "Space Grotesk", sans-serif;
+    color: #00D4AA; font-size: 58px; line-height: 1; letter-spacing: .01em;
+  }
+  .score-fraction { padding-bottom: 5px; color: #FAFAFA; font-size: 22px; line-height: 1.2; }
+  .score-fraction small { display: block; color: #A8A8A8; font-size: 9px; letter-spacing: .12em; }
+  .score-foot {
+    position: absolute; left: 20px; right: 20px; bottom: 26px;
+    color: #A8A8A8; font-size: 10px; letter-spacing: .09em; text-transform: uppercase;
+  }
+  .bar { position: absolute; left: 20px; right: 20px; bottom: 12px; display: flex; gap: 5px; }
+  .bar span { height: 8px; flex: 1; background: #00D4AA; }
+  .bar .warn { background: #F5A623; }
+  .bar .fail { background: #FF4D4D; }
+
+  .terminal {
+    position: absolute; left: 858px; top: 220px; width: 662px; height: 560px;
+    border: 5px solid #FAFAFA; background: #1B1B1B; box-shadow: 12px 12px 0 #000;
+  }
+  .term-head {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 54px; padding: 0 18px; border-bottom: 4px solid #141414;
+    background: #00D4AA; color: #141414;
+    font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  }
+  .dots { display: flex; gap: 7px; }
+  .dots span { width: 10px; height: 10px; background: #141414; }
+  .term-body { padding: 0 18px; }
+  .row {
+    display: grid; grid-template-columns: minmax(0, 1fr) 78px 94px; align-items: center;
+    height: 46px; border-bottom: 1px solid #2E2E2E;
+    font-size: 15px; line-height: 1;
+  }
+  .row:last-child { border-bottom: 0; }
+  .module { color: #FAFAFA; font-weight: 500; }
+  .time { color: #A8A8A8; font-size: 12px; text-align: right; }
+  .res {
+    justify-self: end; width: 88px; padding: 4px 0; border: 2px solid currentColor;
+    font-size: 10px; font-weight: 700; letter-spacing: .08em; text-align: center;
+  }
+  .pass { color: #00D4AA; }
+  .fail { color: #FF4D4D; }
+  .warn { color: #F5A623; }
+  .term-foot {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 82px; padding: 0 18px; border-top: 3px solid #FAFAFA; background: #242424;
+  }
+  .term-foot .label { color: #A8A8A8; font-size: 9px; letter-spacing: .15em; text-transform: uppercase; }
+  .term-foot .value { color: #00D4AA; font-size: 16px; font-weight: 700; letter-spacing: .04em; }
+  .term-foot .pct {
+    font-family: "Silkscreen", "Space Grotesk", sans-serif;
+    color: #00D4AA; font-size: 30px; line-height: 1;
+  }
+
+  .legal {
+    position: absolute; left: 80px; bottom: 52px; display: flex; align-items: center; gap: 16px;
+  }
+  .legal-tag {
+    padding: 7px 9px; border: 2px solid #FAFAFA; background: #F5A623; box-shadow: 3px 3px 0 #000;
+    color: #141414; font-family: "Press Start 2P", monospace; font-size: 8px; line-height: 1.5;
+    text-transform: uppercase;
+  }
+  .legal-meta { color: #A8A8A8; font-size: 10px; line-height: 1.6; letter-spacing: .08em; text-transform: uppercase; }
+  .rights {
+    position: absolute; right: 80px; bottom: 56px; color: #A8A8A8;
+    font-size: 9px; line-height: 1.6; letter-spacing: .12em; text-align: right; text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+  <main class="stage">
+    <div class="brand">
+      <img class="brand-mark" src="logo-agentide.svg" alt="">
+      <div>
+        <div class="brand-name">AgentIde</div>
+        <div class="brand-sub">Endpoint assessment instrument</div>
+      </div>
+    </div>
+
+    <div class="top-meta">
+      <div class="mint">Publication / 2026</div>
+      <div class="dim">Method + evidence</div>
+    </div>
+
+    <div class="headline">
+      Assess what
+      <span class="accent">actually holds.</span>
+    </div>
+    <p class="sub"><strong>MITRE ATT&amp;CK-mapped modules. Deterministic scoring.</strong><br>
+      One auditable run, including the parts that did not pass.</p>
+
+    <div class="score">
+      <div class="score-label">Run score</div>
+      <div class="score-main">
+        <div class="score-big">62.5%</div>
+        <div class="score-fraction">5 / 8<small>modules passed</small></div>
+      </div>
+      <div class="score-foot">1 timeout &nbsp;·&nbsp; 2 fail &nbsp;·&nbsp; blackbox</div>
+      <div class="bar" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span>
+        <span class="warn"></span><span class="fail"></span><span class="fail"></span>
+      </div>
+    </div>
+
+    <div class="terminal" aria-label="Example module run">
+      <div class="term-head">
+        <span>Module run / blackbox</span>
+        <span class="dots" aria-hidden="true"><span></span><span></span><span></span></span>
+      </div>
+      <div class="term-body">
+        <div class="row"><span class="module">performance</span><span class="time">35.0 s</span><span class="res warn">TIMEOUT</span></div>
+        <div class="row"><span class="module">malware</span><span class="time">15.3 s</span><span class="res fail">FAIL</span></div>
+        <div class="row"><span class="module">lolbin</span><span class="time">6.9 s</span><span class="res pass">PASS</span></div>
+        <div class="row"><span class="module">network</span><span class="time">29.8 s</span><span class="res pass">PASS</span></div>
+        <div class="row"><span class="module">identity</span><span class="time">269 ms</span><span class="res pass">PASS</span></div>
+        <div class="row"><span class="module">antitamper</span><span class="time">292 ms</span><span class="res pass">PASS</span></div>
+        <div class="row"><span class="module">falsepositive</span><span class="time">6.8 s</span><span class="res pass">PASS</span></div>
+        <div class="row"><span class="module">reboot</span><span class="time">0 ms</span><span class="res fail">FAIL</span></div>
+      </div>
+      <div class="term-foot">
+        <div><div class="label">Result</div><div class="value">5 / 8 passed</div></div>
+        <div class="pct">62.5%</div>
+      </div>
+    </div>
+
+    <div class="legal">
+      <span class="legal-tag">Authorised testing only</span>
+      <span class="legal-meta">EDR / XDR &nbsp;·&nbsp; blackbox &nbsp;·&nbsp; 2026-10-05</span>
+    </div>
+    <div class="rights">Method published<br>operational detail withheld</div>
+  </main>
+</body>
+</html>
