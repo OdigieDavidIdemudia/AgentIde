@@ -1,0 +1,152 @@
+{
+  "$schema": "personal-design-standard-v1",
+  "_agentide": {
+    "purpose": "Publication-page standard for AgentIde. Mirrors the structure used by the browser-extension-control reference so every project in this portfolio reads as one body of work. This governs the published narrative page ONLY - the live dashboard UI is governed by standard.json + admin-standard.json.",
+    "derived_from": ["design/standard.json", "design/admin-standard.json", "design/marketing-standard.json"],
+    "reference_implementation": "browser-extension-control"
+  },
+
+  "meta": {
+    "name": "AgentIde Publication Standard",
+    "version": "1.0.0",
+    "location": "Single self-contained index.html at the publication root, with design/standard.json alongside it.",
+    "hosting": "NOT HOSTED. Build the artefact, commit it, leave deployment as an explicit later step. Do not add a canonical URL, og:image absolute URL, or a Live: line until it is actually deployed - a canonical URL that 404s is worse than none."
+  },
+
+  "styleVariant": {
+    "chosen": "neobrutalism",
+    "restraint": "minimalism",
+    "composition": "neobrutalism structure (hard 2-3px borders, visible blocky structure, bold headings) x minimalism restraint (no background texture, no filled badges everywhere, no boxy containers for everything, accent rationed)",
+    "whyThisProject": "It is a security instrument, not a consumer product. Visible structure signals instrumentation; the minimalism restraint keeps a dense technical page readable rather than shouting.",
+    "discipline": [
+      "Hard offset shadow (--shadow-hard: 5px 5px 0 var(--fg)) on AT MOST 2 element classes: the hero block and figures/diagrams. Every extra shadow dilutes the ones that earned it.",
+      "Accent colour reserved for: section numerals, inline links, focus rings, one key rule. Never a background fill.",
+      "Callouts reduced to a left border rule + label. No speech-bubble shapes, no arrows.",
+      "No background texture, no dot grid, no sticker tags.",
+      "Status/severity must always pair colour with a text label - never colour alone."
+    ]
+  },
+
+  "typography": {
+    "pairing": "technicalMono",
+    "heading": "Space Grotesk (500, 700)",
+    "body": "Inter (400, 500)",
+    "mono": "JetBrains Mono (400, 700)",
+    "loadVia": "Google Fonts link with preconnect; font-family stack falls back to system sans if offline.",
+    "usage": "Headings Space Grotesk. Prose Inter. Anything that is a path, service name, registry key, command, port or code is JetBrains Mono. This distinction is load-bearing in a security doc - literal values must be typographically separable from prose."
+  },
+
+  "colorSystem": {
+    "accent": {
+      "value": "#B45309",
+      "rationale": "Amber/oxide, NOT the standard placeholder #4F46E5. This is a defensive-security instrument; an indigo/violet accent is explicitly banned by standard.json and also reads as generic SaaS. Amber carries the 'instrumentation / caution' register the subject needs.",
+      "usage": "Section numerals, links, focus ring, one key rule, the key figure. Nothing else."
+    },
+    "statusPalette": {
+      "_rule": "Each status always ships colour + text label + optional glyph. Colour alone is a WCAG failure and is banned by core.accessibility.neverConveyMeaningByColorAlone.",
+      "pass": { "color": "#15803D", "label": "PASS", "meaning": "Vendor detected and resisted" },
+      "fail": { "color": "#B91C1C", "label": "FAIL", "meaning": "Vendor did not detect or did not resist" },
+      "partial": { "color": "#B45309", "label": "PARTIAL", "meaning": "Detected but a control was evaded" },
+      "na": { "color": "#656565", "label": "N/A", "meaning": "Technique not applicable to this endpoint" }
+    },
+    "modes": {
+      "both": "Light and dark are BOTH implemented via prefers-color-scheme AND a manual toggle. The toggle is persisted to localStorage. Dark is designed, not inverted.",
+      "darkAccent": "#F59E0B",
+      "darkAccentReason": "The amber needs lightening to clear 4.5:1 against neutral-900. Use this value, not the light-mode accent, in dark."
+    }
+  },
+
+  "spacing": {
+    "scale": { "xxs": "4px", "xs": "8px", "sm": "12px", "md": "16px", "lg": "24px", "xl": "32px", "2xl": "48px", "3xl": "64px", "4xl": "96px" },
+    "rule": "Only these nine values. No one-off pixels.",
+    "containerMax": "1200px",
+    "proseMax": "46rem"
+  },
+
+  "structure": {
+    "singleFile": "One index.html. CSS in a <style> block, no build step, no framework, no external JS beyond an optional theme toggle.",
+    "why": "The reference project proves this format works for a static publication: it is diffable, reviewable in a PR, and needs no hosting pipeline. A dual-use security write-up should stay auditable in git.",
+    "requiredSections": [
+      "Hero - one-line what it is, the dual-use warning",
+      "The problem being solved",
+      "Architecture - agent / dashboard / design layers",
+      "How an assessment runs - the lifecycle",
+      "Service self-protection - the layered defence",
+      "Safety and authorisation - non-negotiable, stated early",
+      "Limitations and out of scope - honest section",
+      "Attribution / authors"
+    ],
+    "sectionNumeralPattern": "Sections are numbered in the margin with the accent colour, e.g. a mono '03' label. This is the primary use of the accent."
+  },
+
+  "contentSafety": {
+    "_rule": "This is the most important section of this standard. AgentIde stops security services, kills vendor processes, deletes vendor binaries, and installs a hardened SYSTEM service that resists removal. A public write-up must not become a copy-paste EDR-evasion runbook.",
+    "mandatory": [
+      "A prominent dual-use warning ABOVE THE FOLD, not buried in a footer. The reference project's README does this; the page must too.",
+      "Explicit 'authorised testing only' statement with the legal framing (systems you own or have written authorisation to test).",
+      "Describe WHAT each control does and WHY it exists. Do NOT publish a parameterised, ready-to-run evasion sequence.",
+      "Publish the assessment METHODOLOGY and the scoring model. Withhold copy-paste operational detail that would let an unauthorised actor run a full undetected assessment.",
+      "Never publish real customer endpoint data, real tokens, real internal IPs, or organisation names. All examples must be RFC 5737 / RFC 2606 reserved values.",
+      "No live dashboard URLs, no real agent token values, no AGENT_TOKEN strings even as placeholders that look real."
+    ],
+    "placeholderValues": {
+      "ip": "192.0.2.10 (TEST-NET-1, RFC 5737)",
+      "domain": "example.com (RFC 2606)",
+      "token": "<AGENT_TOKEN>",
+      "port": "8443"
+    },
+    "reviewGate": "Before any hosting decision, re-read contentSafety.mandatory against the rendered page. A hosted page is public and indexable."
+  },
+
+  "accessibility": {
+    "minContrastText": "4.5:1",
+    "minContrastLargeText": "3:1",
+    "minTouchTarget": "44px",
+    "focusVisible": "2px solid accent with 2px offset, on every interactive element",
+    "landmarks": "header / main / footer, one h1, no skipped heading levels",
+    "motion": {
+      "durations": { "instant": "80ms", "fast": "150ms", "base": "220ms", "slow": "400ms" },
+      "easing": { "standard": "cubic-bezier(0.4, 0, 0.2, 1)" },
+      "prefersReducedMotion": "@media (prefers-reduced-motion: reduce) must disable all transitions/animations",
+      "rule": "Every animation must confirm a cause and effect. Nothing decorates."
+    },
+    "responsive": {
+      "breakpoints": { "sm": "480px", "md": "768px", "lg": "1024px", "xl": "1440px" },
+      "requirement": "No horizontal overflow at 320px. Tables scroll in their own container rather than widening the page. This was a real fix in the reference project's history - do not regress it."
+    },
+    "code": "Every code block must be selectable text, never an image. Never rely on syntax colour alone for meaning."
+  },
+
+  "metadata": {
+    "required": [
+      "charset, viewport, title, meta description",
+      "Open Graph title/description/type",
+      "favicon as an inline data: URI SVG so the page has zero external asset dependencies",
+      "JSON-LD TechArticle block once published"
+    ],
+    "deferredUntilHosted": [
+      "link rel=canonical with an absolute URL",
+      "og:image pointing at an absolute hosted asset URL",
+      "JSON-LD url and image absolute fields",
+      "a 'Live:' line in the README"
+    ],
+    "_reason": "These are placeholders that resolve to nothing until deployment. Ship them at deploy time, not before."
+  },
+
+  "authorAttribution": {
+    "pattern": "Name plus GitHub profile link, per the reference project. Where two people authored a piece, both get equal billing - never a 'with thanks to'.",
+    "inPage": "Footer attribution block.",
+    "inReadme": "Authors line near the top."
+  },
+
+  "assetPolicy": {
+    "generatedArtwork": "Cover/diagram images are optional and are produced separately. They are NOT required for the page to be complete - the reference project shipped text-first and added artwork in a later commit.",
+    "optimisation": "If artwork is added, keep each under ~1MB and commit it; multi-MB PNGs should be compressed first. The reference project's quantity-vs-allowlist figure is 3MB, which is the upper bound not to exceed.",
+    "placement": "assets/ subfolder, referenced relatively."
+  },
+
+  "commitHygiene": {
+    "oneConcernPerCommit": "The reference history is granular: restyle, artwork, authorship, overflow fix, post drafts each land separately. Follow that - it keeps the design evolution reviewable.",
+    "doNot": "Do not bundle the publication, artwork, README rewrite and unrelated code changes into one commit."
+  }
+}
